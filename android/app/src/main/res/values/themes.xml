@@ -14,7 +14,7 @@
          анімації, щоб не тягнути додаткові ресурси. -->
     <style name="Theme.Kovadlo.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/kovadlo_anvil</item>
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
         <item name="windowSplashScreenIconBackgroundColor">@color/kovadlo_anvil</item>
         <item name="postSplashScreenTheme">@style/Theme.Kovadlo</item>
     </style>
