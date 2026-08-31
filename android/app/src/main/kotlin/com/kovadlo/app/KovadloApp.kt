@@ -39,10 +39,15 @@ class KovadloApp : Application() {
 
         try {
             val python = Python.getInstance()
-            val serverModule = python.getModule("web.server")
+            // android_bootstrap.create_server_or_raise (android/pysrc/, НЕ
+            // web/server.py — той не чіпаємо) замість прямого виклику
+            // create_server: при збої кидає RuntimeError, чиє повідомлення —
+            // повний Python traceback (traceback.format_exc()), а не лише
+            // останній рядок винятку.
+            val bootstrapModule = python.getModule("android_bootstrap")
             // port=0 -> ОС сама обирає вільний локальний порт (як і в
             // тестах на десктопі, create_server(port=0, ...)).
-            val server: PyObject = serverModule.callAttr("create_server", 0)
+            val server: PyObject = bootstrapModule.callAttr("create_server_or_raise", 0)
             val port = server.get("server_address")!!.asList()[1].toInt()
             serverPort = port
 
