@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Спрощений силует ковадла (три прямокутники: робоча поверхня, шийка,
+     основа) — тимчасова іконка з чистих геометричних фігур, без
+     растрових ресурсів. Замінити на повноцінну графіку можна пізніше,
+     не чіпаючи adaptive-icon XML (mipmap-anydpi-v26/ic_launcher.xml). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#E8A33D"
+        android:pathData="M24,32 L84,32 L84,48 L24,48 Z M46,48 L62,48 L62,70 L46,70 Z M32,70 L76,70 L76,84 L32,84 Z" />
+</vector>

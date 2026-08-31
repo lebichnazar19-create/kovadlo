@@ -1,0 +1,3232 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Ковадло — візуалізація</title>
+<style>
+  :root {
+    --bg: #16181c;
+    --panel-bg: #1f2227;
+    --border: #33373f;
+    --text: #e8e6e1;
+    --muted: #9399a4;
+    --accent: #4f8cff;
+    --cut-accent: #ff9d3d;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    overflow: hidden;
+  }
+  #app { display: flex; flex-direction: column; height: 100%; }
+
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 14px; background: var(--panel-bg);
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  header h1 { font-size: 14px; margin: 0; font-weight: 600; white-space: nowrap; }
+  .project-controls { display: flex; gap: 4px; }
+  .tabs { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+  .tab-btn {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  main { flex: 1; display: flex; min-height: 0; }
+  #canvas-wrap {
+    flex: 1; position: relative; overflow: hidden;
+    touch-action: none; background: #101216;
+  }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #hint {
+    position: absolute; left: 10px; top: 10px; max-width: 280px;
+    background: rgba(0,0,0,0.6); padding: 6px 10px; border-radius: 6px;
+    font-size: 12px; color: #fff; pointer-events: none; line-height: 1.4;
+  }
+  #zoom-hint {
+    position: absolute; right: 10px; bottom: 10px;
+    background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 5px;
+    font-size: 11px; color: var(--muted);
+  }
+  #view-buttons {
+    position: absolute; right: 10px; top: 10px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  #view-buttons button { font-size: 11px; padding: 5px 8px; }
+
+  aside {
+    width: 330px; flex-shrink: 0; background: var(--panel-bg);
+    border-left: 1px solid var(--border); overflow-y: auto;
+    padding: 14px; display: flex; flex-direction: column; gap: 16px;
+  }
+  aside section { display: flex; flex-direction: column; }
+  aside h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--muted); margin: 0 0 8px; font-weight: 600;
+  }
+  .field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
+  .field label { font-size: 11px; color: var(--muted); }
+  .field input, .field select {
+    background: #14161a; border: 1px solid var(--border); color: var(--text);
+    padding: 6px 8px; border-radius: 5px; font-size: 13px; width: 100%;
+  }
+  input[type="color"] { padding: 2px; height: 32px; cursor: pointer; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  button {
+    font-family: inherit; border: none; border-radius: 6px;
+    cursor: pointer; font-size: 13px; padding: 9px 12px;
+  }
+  button.primary { background: var(--accent); color: #fff; font-weight: 600; }
+  button.secondary { background: none; border: 1px solid var(--border); color: var(--text); }
+  button.block { width: 100%; }
+  button:disabled { opacity: .45; cursor: default; }
+
+  #wall-list { display: flex; flex-direction: column; gap: 5px; max-height: 160px; overflow-y: auto; }
+  .wall-item {
+    display: flex; justify-content: space-between; gap: 8px;
+    padding: 7px 9px; border: 1px solid var(--border); border-radius: 5px;
+    font-size: 12px; cursor: pointer;
+  }
+  .wall-item:hover { border-color: #545b66; }
+  .wall-item.selected { border-color: var(--accent); background: rgba(79,140,255,.14); }
+  .wall-item .muted { color: var(--muted); }
+
+  #report {
+    white-space: pre-wrap; font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px; background: #14161a; border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px; line-height: 1.55; max-height: 320px; overflow-y: auto;
+  }
+  .muted { color: var(--muted); font-size: 12px; }
+  .legend { display: flex; gap: 14px; font-size: 11px; color: var(--muted); margin: 6px 0 2px; flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .swatch { width: 11px; height: 11px; border-radius: 2px; display: inline-block; border: 1px solid rgba(255,255,255,.25); }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 12px; margin-bottom: 4px; }
+  .stat-grid div.k { color: var(--muted); }
+  .stat-grid div.v { text-align: right; font-weight: 600; }
+  hr.sep { border: none; border-top: 1px solid var(--border); margin: 2px 0; }
+
+  .kind-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 4px; }
+  .kind-btn {
+    background: #14161a; border: 1px solid var(--border); color: var(--text);
+    padding: 8px 6px; border-radius: 6px; cursor: pointer; font-size: 12px;
+  }
+  .kind-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .point-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 9px; border: 1px solid var(--border); border-radius: 5px;
+    font-size: 12px; margin-bottom: 5px;
+  }
+  .point-item .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(255,255,255,.3); }
+  .point-item .grow { flex: 1; min-width: 0; }
+  .point-item .name { font-weight: 600; }
+  .point-item .sub { color: var(--muted); font-size: 11px; }
+  .point-item .actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .icon-btn {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    padding: 4px 7px; border-radius: 5px; font-size: 11px; cursor: pointer;
+  }
+  .icon-btn.danger { color: #ff6b6b; border-color: #5a3232; }
+  .route-live {
+    background: rgba(255,180,84,0.12); border: 1px solid #ffb454;
+    border-radius: 6px; padding: 8px 10px; font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Ковадло</h1>
+    <div class="project-controls">
+      <button class="secondary" onclick="saveProjectToFile()">Зберегти проєкт</button>
+      <button class="secondary" onclick="openProjectFromFile()">Відкрити проєкт</button>
+      <input type="file" id="project-file-input" accept="application/json" style="display:none">
+    </div>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="top">Вид зверху</button>
+      <button class="tab-btn" data-tab="wall">Розгортка / плитка</button>
+      <button class="tab-btn" data-tab="electrical">Електрика</button>
+      <button class="tab-btn" data-tab="lighting">Освітлення</button>
+      <button class="tab-btn" data-tab="ventilation">Вентиляція</button>
+      <button class="tab-btn" data-tab="heat">Тепло</button>
+      <button class="tab-btn" data-tab="fire">Пожежна безпека</button>
+      <button class="tab-btn" data-tab="3d">3D</button>
+    </div>
+  </header>
+  <main>
+    <div id="canvas-wrap">
+      <canvas id="canvas"></canvas>
+      <canvas id="canvas3d" style="display:none"></canvas>
+      <div id="hint"></div>
+      <div id="zoom-hint">Перетягніть — панорама, щипок/колесо — масштаб</div>
+      <div id="view-buttons" style="display:none">
+        <button class="secondary" data-view="top">Зверху</button>
+        <button class="secondary" data-view="front">Спереду</button>
+        <button class="secondary" data-view="iso">Ізометрія</button>
+      </div>
+    </div>
+    <aside id="panel"></aside>
+  </main>
+</div>
+
+<!-- three.js — класична глобальна збірка (r128, до переходу на лише ES-модулі),
+     обрана як простіший і надійніший варіант за сирий WebGL для мобільного Chrome. -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script>
+"use strict";
+
+/* ---------------------------------------------------------------------
+ * Загальні утиліти
+ * ------------------------------------------------------------------- */
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const wrap = document.getElementById("canvas-wrap");
+const hintEl = document.getElementById("hint");
+const panelEl = document.getElementById("panel");
+
+const MIN_SCALE = 0.005;
+const MAX_SCALE = 5;
+const CLOSE_TAP_PX = 20;   // тап ближче цієї відстані до першої точки замикає контур
+const TAP_MAX_MOVE_PX = 9;  // поріг "це був тап, а не перетягування"
+const TAP_MAX_MS = 500;
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function el(html) {
+  const t = document.createElement("template");
+  t.innerHTML = html.trim();
+  return t.content.firstElementChild;
+}
+
+function mixColor(hex, mixHex, amount) {
+  const a = parseHex(hex), b = parseHex(mixHex);
+  const r = Math.round(a[0] + (b[0]-a[0])*amount);
+  const g = Math.round(a[1] + (b[1]-a[1])*amount);
+  const bl = Math.round(a[2] + (b[2]-a[2])*amount);
+  return `rgb(${r},${g},${bl})`;
+}
+function parseHex(hex) {
+  hex = hex.replace("#", "");
+  if (hex.length === 3) hex = hex.split("").map(c => c+c).join("");
+  const n = parseInt(hex, 16);
+  return [(n>>16)&255, (n>>8)&255, n&255];
+}
+
+async function apiPost(path, body) {
+  const res = await fetch(path, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Помилка запиту");
+  return data;
+}
+async function apiGet(path) {
+  const res = await fetch(path);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Помилка запиту");
+  return data;
+}
+function apiSnap(origin, target, step) {
+  return apiPost("/api/snap", { origin: [origin.x, origin.z], target: [target.x, target.z], step: step ?? 15 });
+}
+
+/* ---------------------------------------------------------------------
+ * Стан застосунку
+ * ------------------------------------------------------------------- */
+
+const POINT_KINDS = [
+  { kind: "SOCKET", label: "Розетка", glyph: "Р" },
+  { kind: "SWITCH", label: "Вимикач", glyph: "В" },
+  { kind: "LIGHT", label: "Світильник", glyph: "С" },
+  { kind: "STOVE", label: "Плита", glyph: "П" },
+  { kind: "BOILER", label: "Бойлер", glyph: "Б" },
+  { kind: "PANEL", label: "Щиток", glyph: "Щ" },
+];
+const ELECTRICAL_PALETTE = ["#4f8cff", "#ff9d3d", "#5ad17a", "#e05fd0", "#f4d35e", "#7ad6e0", "#c76b6b", "#9b7edb"];
+
+const state = {
+  tab: "top",                 // "top" | "wall" | "electrical"
+  drawing: [],                 // точки контуру, що малюється (world, мм), поки не замкнено
+  room: null,                  // остання кімната з сервера (JSON)
+  selectedWallIndex: null,     // null => підлога, число => індекс стіни
+  tiling: null,                // остання відповідь /api/tiling
+  layoutStart: { x: 0, z: 0 }, // стартова точка розкладки (world поверхні, мм)
+  viewTop: { scale: 0.15, offsetX: 0, offsetY: 0 },
+  viewWall: { scale: 0.15, offsetX: 0, offsetY: 0 },
+
+  // --- модуль 5: електропроводка (вкладка "Електрика" ділить viewTop із видом зверху) ---
+  electrical: {
+    placingKind: null,          // тип точки, що зараз ставиться тапом, або null
+    drawingRoute: null,         // {targetName, points:[{x,z},...]} під час малювання траси
+    data: null,                 // останній /api/electrical/state
+    report: null,               // останній /api/electrical/report
+    colorForGroup: new Map(),   // ім'я групи -> колір (стабільно в межах сесії)
+  },
+
+  // --- модуль 9.1: освітлення ---
+  lighting: {
+    placingKind: null,   // тип світильника, що зараз ставиться тапом, або null
+    data: null,          // останній /api/lighting/state
+  },
+
+  // --- модуль 9.2: вентиляція ---
+  ventilation: {
+    drawingDuct: null,   // {points:[{x,z},...]} під час малювання повітропроводу
+    data: null,          // останній /api/ventilation/state
+  },
+
+  // --- модуль 9.4: тепло ---
+  heat: {
+    selectedWallIndex: null, // яку стіну редагуємо зараз
+    materials: null,          // каталог /api/heat/materials
+    data: null,               // останній /api/heat/state
+  },
+
+  // --- модуль 9.5: пожежна безпека ---
+  fire: {
+    data: null, // останній /api/fire/state
+  },
+
+  // --- модуль 11: 3D-перегляд ---
+  scene3d: {
+    data: null,             // останній /api/scene3d
+    showRoof: true,
+    showWalls: true,
+    selectedWallIndex: null,   // для розстановки отворів
+    roofType: "NONE",
+    roofSlope: 30,
+  },
+};
+
+// Живі об'єкти three.js (сцена/камера/рендерер/меші) — НЕ частина
+// серіалізованого стану вище, живуть окремо й створюються один раз
+// при першому вході на вкладку "3D".
+let scene3d = null;
+
+function activeView() { return state.tab === "wall" ? state.viewWall : state.viewTop; }
+
+// Вкладки, що ділять вид зверху (state.viewTop) і базовий план кімнати:
+const TOP_VIEW_SHARING_TABS = new Set(["top", "electrical", "lighting", "ventilation", "heat", "fire"]);
+
+/* ---------------------------------------------------------------------
+ * Координати: світ (мм) <-> екран (CSS-пікселі)
+ * Z світу росте "вгору" на екрані (архітектурна умовність).
+ * ------------------------------------------------------------------- */
+
+function worldToScreen(x, z, view) {
+  return { x: view.offsetX + x * view.scale, y: view.offsetY - z * view.scale };
+}
+function screenToWorld(sx, sy, view) {
+  return { x: (sx - view.offsetX) / view.scale, z: (view.offsetY - sy) / view.scale };
+}
+
+function boundsOfPoints(pts) {
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const p of pts) {
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+    minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
+  }
+  return { minX, maxX, minZ, maxZ };
+}
+
+function fitView(view, pts, marginPx) {
+  marginPx = marginPx ?? 70;
+  if (!pts.length) { view.scale = 0.15; view.offsetX = wrap.clientWidth/2; view.offsetY = wrap.clientHeight/2; return; }
+  const b = boundsOfPoints(pts);
+  const w = Math.max(1, b.maxX - b.minX), h = Math.max(1, b.maxZ - b.minZ);
+  const availW = Math.max(50, wrap.clientWidth - marginPx*2);
+  const availH = Math.max(50, wrap.clientHeight - marginPx*2);
+  view.scale = clamp(Math.min(availW/w, availH/h), MIN_SCALE, MAX_SCALE);
+  const cx = (b.minX+b.maxX)/2, cz = (b.minZ+b.maxZ)/2;
+  view.offsetX = wrap.clientWidth/2 - cx*view.scale;
+  view.offsetY = wrap.clientHeight/2 + cz*view.scale;
+}
+
+/* ---------------------------------------------------------------------
+ * Взаємодія: тап / перетягування (панорама) / щипок (масштаб)
+ * Через Pointer Events — однаково працює для миші й пальця.
+ * ------------------------------------------------------------------- */
+
+const pointers = new Map();
+let dragStart = null;
+let singleStart = null;
+let pinch = null; // {startDist, startScale}
+
+canvas.addEventListener("pointerdown", (e) => {
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 1) {
+    const p = [...pointers.values()][0];
+    singleStart = { x: p.x, y: p.y, t: performance.now() };
+    const view = activeView();
+    dragStart = { x: p.x, y: p.y, offsetX: view.offsetX, offsetY: view.offsetY };
+  } else if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    pinch = { startDist: Math.hypot(a.x-b.x, a.y-b.y), startScale: activeView().scale };
+    singleStart = null;
+  }
+});
+
+canvas.addEventListener("pointermove", (e) => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const view = activeView();
+  if (pointers.size === 1 && dragStart) {
+    const p = [...pointers.values()][0];
+    view.offsetX = dragStart.offsetX + (p.x - dragStart.x);
+    view.offsetY = dragStart.offsetY + (p.y - dragStart.y);
+    redraw();
+  } else if (pointers.size === 2 && pinch) {
+    const [a, b] = [...pointers.values()];
+    const dist = Math.hypot(a.x-b.x, a.y-b.y);
+    const mid = { x: (a.x+b.x)/2, y: (a.y+b.y)/2 };
+    const rect = canvas.getBoundingClientRect();
+    const midCanvas = { x: mid.x - rect.left, y: mid.y - rect.top };
+    const worldMid = screenToWorld(midCanvas.x, midCanvas.y, view);
+    view.scale = clamp(pinch.startScale * (dist / pinch.startDist), MIN_SCALE, MAX_SCALE);
+    const after = worldToScreen(worldMid.x, worldMid.z, view);
+    view.offsetX += midCanvas.x - after.x;
+    view.offsetY += midCanvas.y - after.y;
+    redraw();
+  }
+});
+
+function endPointer(e) {
+  const wasSingle = pointers.size === 1;
+  const p = pointers.get(e.pointerId);
+  pointers.delete(e.pointerId);
+  if (wasSingle && singleStart && p) {
+    const dist = Math.hypot(p.x - singleStart.x, p.y - singleStart.y);
+    const dt = performance.now() - singleStart.t;
+    if (dist < TAP_MAX_MOVE_PX && dt < TAP_MAX_MS) {
+      const rect = canvas.getBoundingClientRect();
+      handleTap(p.x - rect.left, p.y - rect.top);
+    }
+  }
+  if (pointers.size < 1) { singleStart = null; dragStart = null; }
+  if (pointers.size < 2) { pinch = null; }
+}
+canvas.addEventListener("pointerup", endPointer);
+canvas.addEventListener("pointercancel", endPointer);
+
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const view = activeView();
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const before = screenToWorld(mx, my, view);
+  view.scale = clamp(view.scale * Math.exp(-e.deltaY * 0.0012), MIN_SCALE, MAX_SCALE);
+  const after = worldToScreen(before.x, before.z, view);
+  view.offsetX += mx - after.x;
+  view.offsetY += my - after.y;
+  redraw();
+}, { passive: false });
+
+/* ---------------------------------------------------------------------
+ * Обробка тапу залежно від вкладки/режиму
+ * ------------------------------------------------------------------- */
+
+function handleTap(sx, sy) {
+  if (state.tab === "top") {
+    if (!state.room) { onDrawTap(sx, sy); }
+    else { onSelectWallTap(sx, sy); }
+  } else if (state.tab === "wall") {
+    onSetLayoutStartTap(sx, sy);
+  } else if (state.tab === "electrical") {
+    onElectricalTap(sx, sy);
+  } else if (state.tab === "lighting") {
+    onLightingTap(sx, sy);
+  } else if (state.tab === "ventilation") {
+    onVentilationTap(sx, sy);
+  } else if (state.tab === "heat") {
+    onHeatTap(sx, sy);
+  }
+  // "fire" — лише кнопка автоматичної розстановки, тап на плані не потрібен
+}
+
+async function onDrawTap(sx, sy) {
+  const view = state.viewTop;
+  const worldRaw = screenToWorld(sx, sy, view);
+
+  if (state.drawing.length >= 3) {
+    const firstScreen = worldToScreen(state.drawing[0].x, state.drawing[0].z, view);
+    if (Math.hypot(firstScreen.x - sx, firstScreen.y - sy) < CLOSE_TAP_PX) {
+      await finalizeRoom();
+      return;
+    }
+  }
+
+  let point;
+  if (state.drawing.length === 0) {
+    point = { x: Math.round(worldRaw.x), z: Math.round(worldRaw.z) };
+  } else {
+    const origin = state.drawing[state.drawing.length - 1];
+    try {
+      point = await apiSnap(origin, worldRaw, 15);
+    } catch (e) {
+      console.error(e);
+      return;
+    }
+  }
+  state.drawing.push(point);
+  updateHint();
+  redraw();
+}
+
+function onSelectWallTap(sx, sy) {
+  const view = state.viewTop;
+  const world = screenToWorld(sx, sy, view);
+  const threshold = 16 / view.scale; // ~16px у поточному масштабі, у мм
+  let bestIdx = null, bestDist = Infinity;
+  state.room.walls.forEach((w, idx) => {
+    const d = distPointToSegment(world, { x: w.start[0], z: w.start[1] }, { x: w.end[0], z: w.end[1] });
+    if (d < bestDist) { bestDist = d; bestIdx = idx; }
+  });
+  if (bestIdx !== null && bestDist < threshold) {
+    selectSurface(bestIdx);
+    setTab("wall");
+  }
+}
+
+function onSetLayoutStartTap(sx, sy) {
+  if (!state.tiling) return;
+  const world = screenToWorld(sx, sy, state.viewWall);
+  state.layoutStart = { x: Math.round(world.x), z: Math.round(world.z) };
+  syncLayoutStartInputs();
+  recalcTiling();
+}
+
+function distPointToSegment(p, a, b) {
+  const abx = b.x - a.x, abz = b.z - a.z;
+  const len2 = abx*abx + abz*abz;
+  let t = len2 > 0 ? ((p.x-a.x)*abx + (p.z-a.z)*abz) / len2 : 0;
+  t = clamp(t, 0, 1);
+  const cx = a.x + t*abx, cz = a.z + t*abz;
+  return Math.hypot(p.x - cx, p.z - cz);
+}
+
+/* ---------------------------------------------------------------------
+ * Модуль 5: електропроводка (розстановка точок, траси, групи, звіт)
+ * ------------------------------------------------------------------- */
+
+async function onElectricalTap(sx, sy) {
+  const view = state.viewTop;
+  const world = screenToWorld(sx, sy, view);
+  const el5 = state.electrical;
+
+  if (el5.drawingRoute) {
+    // тап по цільовій точці (в межах CLOSE_TAP_PX) завершує трасу
+    const target = (el5.data?.points || []).find(p => p.name === el5.drawingRoute.targetName);
+    if (target) {
+      const targetScreen = worldToScreen(target.position[0], target.position[1], view);
+      if (Math.hypot(targetScreen.x - sx, targetScreen.y - sy) < CLOSE_TAP_PX && el5.drawingRoute.points.length > 1) {
+        await finishRoute();
+        return;
+      }
+    }
+    // інакше — додаємо вигин траси з прив'язкою до 90°
+    const prev = el5.drawingRoute.points[el5.drawingRoute.points.length - 1];
+    try {
+      const snapped = await apiSnap(prev, world, 90);
+      el5.drawingRoute.points.push(snapped);
+      renderElectricalPanel();
+      updateHint();
+      redraw();
+    } catch (e) { console.error(e); }
+    return;
+  }
+
+  if (el5.placingKind) {
+    await placeElectricalPoint(el5.placingKind, world);
+  }
+}
+
+async function placeElectricalPoint(kind, world) {
+  try {
+    await apiPost("/api/electrical/point", { kind, position: [Math.round(world.x), Math.round(world.z)] });
+    await refreshElectricalState();
+    await refreshElectricalReport();
+    renderElectricalPanel();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося поставити точку: " + e.message);
+  }
+}
+
+async function deleteElectricalPoint(name) {
+  try {
+    await apiPost("/api/electrical/point_delete", { point_name: name });
+    await refreshElectricalState();
+    await refreshElectricalReport();
+    renderElectricalPanel();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося видалити точку: " + e.message);
+  }
+}
+
+function startRoute(pointName) {
+  const el5 = state.electrical;
+  if (!el5.data || !el5.data.panel) { alert("Спочатку поставте щиток (кнопка «Щиток» і тап на плані)."); return; }
+  el5.drawingRoute = { targetName: pointName, points: [{ x: el5.data.panel.position[0], z: el5.data.panel.position[1] }] };
+  el5.placingKind = null;
+  renderElectricalPanel();
+  updateHint();
+  redraw();
+}
+
+async function finishRoute() {
+  const el5 = state.electrical;
+  const dr = el5.drawingRoute;
+  if (!dr || dr.points.length < 2) { alert("Додайте хоча б один вигин траси перед завершенням."); return; }
+  try {
+    await apiPost("/api/electrical/route", {
+      point_name: dr.targetName,
+      points: dr.points.slice(1).map(p => [p.x, p.z]), // без щитка — сервер сам його підставить
+    });
+    el5.drawingRoute = null;
+    await refreshElectricalState();
+    await refreshElectricalReport();
+    renderElectricalPanel();
+    updateHint();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося зберегти трасу: " + e.message);
+  }
+}
+
+function cancelRoute() {
+  state.electrical.drawingRoute = null;
+  renderElectricalPanel();
+  updateHint();
+  redraw();
+}
+
+function routeDrawingLengthM() {
+  const dr = state.electrical.drawingRoute;
+  if (!dr) return 0;
+  let total = 0;
+  for (let i = 0; i < dr.points.length - 1; i++) {
+    total += Math.hypot(dr.points[i+1].x - dr.points[i].x, dr.points[i+1].z - dr.points[i].z);
+  }
+  return total / 1000;
+}
+
+async function assignGroup(pointName, groupName, phase, minCrossSection) {
+  if (!groupName) { alert("Вкажіть назву групи."); return; }
+  try {
+    await apiPost("/api/electrical/assign_group", {
+      point_name: pointName,
+      group_name: groupName,
+      phase,
+      min_cross_section_mm2: Number(minCrossSection) || 1.5,
+    });
+    await refreshElectricalState();
+    await refreshElectricalReport();
+    renderElectricalPanel();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося прив'язати до групи: " + e.message);
+  }
+}
+
+async function resetElectrical() {
+  try {
+    await apiPost("/api/electrical/reset", {});
+    state.electrical.drawingRoute = null;
+    state.electrical.placingKind = null;
+    state.electrical.colorForGroup.clear();
+    await refreshElectricalState();
+    await refreshElectricalReport();
+    renderElectricalPanel();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося скинути електрику: " + e.message);
+  }
+}
+
+async function refreshElectricalState() {
+  try { state.electrical.data = await apiGet("/api/electrical/state"); }
+  catch (e) { state.electrical.data = null; }
+}
+
+async function refreshElectricalReport() {
+  try { state.electrical.report = await apiGet("/api/electrical/report"); }
+  catch (e) { state.electrical.report = null; }
+}
+
+function exportReportText(text, filename, emptyMessage) {
+  if (!text) { alert(emptyMessage || "Ще немає звіту для експорту."); return; }
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportElectricalReport() {
+  exportReportText(
+    state.electrical.report?.report_text,
+    "kovadlo-electrical-report.txt",
+    "Спершу маєте хоча б одну завершену групу (точка + траса + прив'язка до групи)."
+  );
+}
+
+/* ---------------------------------------------------------------------
+ * Модуль 9.1: освітлення
+ * ------------------------------------------------------------------- */
+
+const LIGHTING_KINDS = [
+  { kind: "CEILING", label: "Стельовий" },
+  { kind: "WALL", label: "Настінний" },
+  { kind: "SPOT", label: "Точковий" },
+  { kind: "PENDANT", label: "Підвісний" },
+  { kind: "LED_STRIP", label: "LED-стрічка" },
+];
+const ROOM_PURPOSES = [
+  { kind: "KITCHEN", label: "Кухня" },
+  { kind: "BATHROOM", label: "Ванна" },
+  { kind: "BEDROOM", label: "Спальня" },
+  { kind: "LIVING_ROOM", label: "Вітальня" },
+  { kind: "WORKSHOP", label: "Майстерня" },
+  { kind: "OFFICE", label: "Офіс/кабінет" },
+  { kind: "HALLWAY", label: "Коридор" },
+  { kind: "STAIRS", label: "Сходи" },
+];
+
+async function onLightingTap(sx, sy) {
+  const kind = state.lighting.placingKind;
+  if (!kind) return;
+  const world = screenToWorld(sx, sy, state.viewTop);
+  try {
+    await apiPost("/api/lighting/fixture", {
+      kind,
+      position: [Math.round(world.x), Math.round(world.z)],
+      luminous_flux_lm: Number(fieldVal("lighting-flux", 800)),
+      power_w: Number(fieldVal("lighting-power", 8)),
+    });
+    await refreshLightingState();
+    renderLightingPanel();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося поставити світильник: " + e.message);
+  }
+}
+
+async function deleteLightingFixture(name) {
+  try {
+    await apiPost("/api/lighting/fixture_delete", { name });
+    await refreshLightingState();
+    renderLightingPanel();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося видалити світильник: " + e.message);
+  }
+}
+
+async function setLightingPurpose(purpose) {
+  try {
+    await apiPost("/api/lighting/settings", { room_purpose: purpose });
+    await refreshLightingState();
+    renderLightingPanel();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося змінити призначення кімнати: " + e.message);
+  }
+}
+
+async function resetLighting() {
+  try {
+    await apiPost("/api/lighting/reset", {});
+    await refreshLightingState();
+    renderLightingPanel();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося скинути освітлення: " + e.message);
+  }
+}
+
+async function refreshLightingState() {
+  try { state.lighting.data = await apiGet("/api/lighting/state"); }
+  catch (e) { state.lighting.data = null; }
+}
+
+function exportLightingReport() {
+  exportReportText(state.lighting.data?.report_text, "kovadlo-lighting-report.txt");
+}
+
+// Колір зони освітленості: тепліший/яскравіший = ближче до джерел світла.
+// Це якісна (не фізична) візуалізація — реальне число лк показане в панелі
+// з формули ядра (`illuminance_lux`), а не з цього градієнта.
+function lightingHeatColor(score) {
+  const t = clamp(score, 0, 1);
+  const hue = 220 - 220 * t; // 220° (холодний синій) -> 0° (теплий червоно-жовтий)
+  const light = 12 + 18 * t;
+  return `hsl(${hue}, 80%, ${light}%)`;
+}
+
+/* ---------------------------------------------------------------------
+ * Модуль 9.2: вентиляція
+ * ------------------------------------------------------------------- */
+
+const VENTILATION_ROOM_KINDS = [
+  { kind: "KITCHEN", label: "Кухня" },
+  { kind: "BATHROOM", label: "Ванна" },
+  { kind: "TOILET", label: "Туалет" },
+  { kind: "BEDROOM", label: "Спальня" },
+  { kind: "LIVING_ROOM", label: "Вітальня" },
+];
+
+function startDuctDrawing() {
+  state.ventilation.drawingDuct = { points: [] };
+  renderVentilationPanel();
+  updateHint();
+  redraw();
+}
+
+async function onVentilationTap(sx, sy) {
+  const duct = state.ventilation.drawingDuct;
+  if (!duct) return;
+  const world = screenToWorld(sx, sy, state.viewTop);
+  if (duct.points.length === 0) {
+    duct.points.push({ x: Math.round(world.x), z: Math.round(world.z) });
+  } else {
+    try {
+      const snapped = await apiSnap(duct.points[duct.points.length - 1], world, 90);
+      duct.points.push(snapped);
+    } catch (e) {
+      console.error(e);
+      return;
+    }
+  }
+  renderVentilationPanel();
+  redraw();
+}
+
+async function finishDuctDrawing() {
+  const duct = state.ventilation.drawingDuct;
+  if (!duct || duct.points.length < 2) { alert("Додайте хоча б дві точки перед завершенням."); return; }
+  const shape = fieldVal("duct-shape", "ROUND");
+  const payload = { points: duct.points.map(p => [p.x, p.z]), shape };
+  if (shape === "ROUND") {
+    payload.diameter_mm = Number(fieldVal("duct-diameter", 100));
+  } else {
+    payload.width_mm = Number(fieldVal("duct-width", 200));
+    payload.height_mm = Number(fieldVal("duct-height", 100));
+  }
+  try {
+    await apiPost("/api/ventilation/duct", payload);
+    state.ventilation.drawingDuct = null;
+    await refreshVentilationState();
+    renderVentilationPanel();
+    updateHint();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося зберегти повітропровід: " + e.message);
+  }
+}
+
+function cancelDuctDrawing() {
+  state.ventilation.drawingDuct = null;
+  renderVentilationPanel();
+  updateHint();
+  redraw();
+}
+
+async function deleteDuct(name) {
+  try {
+    await apiPost("/api/ventilation/duct_delete", { name });
+    await refreshVentilationState();
+    renderVentilationPanel();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося видалити повітропровід: " + e.message);
+  }
+}
+
+async function setVentilationRoomKind(kind) {
+  try {
+    await apiPost("/api/ventilation/settings", { room_kind: kind });
+    await refreshVentilationState();
+    renderVentilationPanel();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося змінити призначення приміщення: " + e.message);
+  }
+}
+
+async function resetVentilation() {
+  try {
+    await apiPost("/api/ventilation/reset", {});
+    await refreshVentilationState();
+    renderVentilationPanel();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося скинути вентиляцію: " + e.message);
+  }
+}
+
+async function refreshVentilationState() {
+  try { state.ventilation.data = await apiGet("/api/ventilation/state"); }
+  catch (e) { state.ventilation.data = null; }
+}
+
+function exportVentilationReport() {
+  exportReportText(state.ventilation.data?.report_text, "kovadlo-ventilation-report.txt");
+}
+
+/* ---------------------------------------------------------------------
+ * Модуль 9.4: тепло
+ * ------------------------------------------------------------------- */
+
+const CLIMATE_ZONES = ["ZONE_I", "ZONE_II", "ZONE_III", "ZONE_IV", "ZONE_V"];
+
+function onHeatTap(sx, sy) {
+  if (!state.room) return;
+  const view = state.viewTop;
+  const world = screenToWorld(sx, sy, view);
+  const threshold = 16 / view.scale;
+  let bestIdx = null, bestDist = Infinity;
+  state.room.walls.forEach((w, idx) => {
+    const d = distPointToSegment(world, { x: w.start[0], z: w.start[1] }, { x: w.end[0], z: w.end[1] });
+    if (d < bestDist) { bestDist = d; bestIdx = idx; }
+  });
+  if (bestIdx !== null && bestDist < threshold) {
+    selectHeatWall(bestIdx);
+  }
+}
+
+function selectHeatWall(idx) {
+  state.heat.selectedWallIndex = idx;
+  state.selectedWallIndex = idx; // підсвітка на плані через спільний drawRoomPlan
+  renderHeatPanel();
+  redraw();
+}
+
+async function refreshHeatMaterials() {
+  if (state.heat.materials) return;
+  try { state.heat.materials = await apiGet("/api/heat/materials"); }
+  catch (e) { state.heat.materials = []; }
+}
+
+async function refreshHeatState() {
+  try { state.heat.data = await apiGet("/api/heat/state"); }
+  catch (e) { state.heat.data = null; }
+}
+
+function currentHeatLayers(wallIdx) {
+  const wall = state.heat.data?.walls?.[wallIdx];
+  return (wall?.layers || []).map(l => ({ material_name: l.material_name, thickness_mm: l.thickness_mm }));
+}
+
+async function addHeatLayer(materialName, thicknessMm) {
+  const wallIdx = state.heat.selectedWallIndex;
+  if (wallIdx === null || !materialName || !(thicknessMm > 0)) return;
+  const layers = currentHeatLayers(wallIdx);
+  layers.push({ material_name: materialName, thickness_mm: thicknessMm });
+  await saveHeatLayers(wallIdx, layers);
+}
+
+async function removeHeatLayer(index) {
+  const wallIdx = state.heat.selectedWallIndex;
+  if (wallIdx === null) return;
+  const layers = currentHeatLayers(wallIdx);
+  layers.splice(index, 1);
+  await saveHeatLayers(wallIdx, layers);
+}
+
+async function saveHeatLayers(wallIdx, layers) {
+  try {
+    await apiPost("/api/heat/wall_layers", { wall_index: wallIdx, layers });
+    await refreshHeatState();
+    renderHeatPanel();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося зберегти шари стіни: " + e.message);
+  }
+}
+
+async function updateHeatSettings(patch) {
+  try {
+    await apiPost("/api/heat/settings", patch);
+    await refreshHeatState();
+    renderHeatPanel();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося оновити налаштування: " + e.message);
+  }
+}
+
+async function resetHeat() {
+  try {
+    await apiPost("/api/heat/reset", {});
+    await refreshHeatState();
+    renderHeatPanel();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося скинути дані утеплення: " + e.message);
+  }
+}
+
+function exportHeatReport() {
+  exportReportText(state.heat.data?.report_text, "kovadlo-heat-report.txt");
+}
+
+/* ---------------------------------------------------------------------
+ * Модуль 9.5: пожежна безпека
+ * ------------------------------------------------------------------- */
+
+async function autoPlaceDetectors() {
+  try {
+    await apiPost("/api/fire/auto_place", {});
+    await refreshFireState();
+    renderFirePanel();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося розставити датчики: " + e.message);
+  }
+}
+
+async function setFireDetectorKind(kind) {
+  try {
+    await apiPost("/api/fire/settings", { detector_kind: kind });
+    await refreshFireState();
+    renderFirePanel();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося змінити тип датчика: " + e.message);
+  }
+}
+
+async function resetFire() {
+  try {
+    await apiPost("/api/fire/reset", {});
+    await refreshFireState();
+    renderFirePanel();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося скинути пожежну безпеку: " + e.message);
+  }
+}
+
+async function refreshFireState() {
+  try { state.fire.data = await apiGet("/api/fire/state"); }
+  catch (e) { state.fire.data = null; }
+}
+
+function exportFireReport() {
+  exportReportText(state.fire.data?.report_text, "kovadlo-fire-report.txt");
+}
+
+/* ---------------------------------------------------------------------
+ * Модуль 11: 3D-перегляд (three.js)
+ * ------------------------------------------------------------------- */
+
+const MATERIAL_CATEGORY_COLORS = {
+  CONCRETE: 0xb0b0a8,
+  GYPSUM: 0xe8e0d0,
+  TILE_ADHESIVE: 0xd8d0c0,
+  GROUT: 0xc8c8c8,
+  METAL: 0xb8b8c0,
+  INSULATION: 0xf0d878,
+  CONDUCTOR: 0xb87333,
+};
+const DEFAULT_WALL_COLOR = 0xcfc7b8;
+const ROOF_COLOR = 0x8a5a3c;
+const DUCT_COLOR = 0x7ad6e0;
+const ROUTE_COLOR = 0x4f8cff;
+const FIXTURE_COLOR = 0xffe08a;
+
+const canvas3dEl = document.getElementById("canvas3d");
+
+function ensureThreeScene() {
+  if (scene3d) return;
+  const renderer = new THREE.WebGLRenderer({ canvas: canvas3dEl, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x14161a);
+
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 200);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.75);
+  sun.position.set(5, 10, 7);
+  scene.add(sun);
+
+  const wallsGroup = new THREE.Group();
+  const floorGroup = new THREE.Group();
+  const roofGroup = new THREE.Group();
+  const ductsGroup = new THREE.Group();
+  const routesGroup = new THREE.Group();
+  const fixturesGroup = new THREE.Group();
+  scene.add(wallsGroup, floorGroup, roofGroup, ductsGroup, routesGroup, fixturesGroup);
+
+  scene3d = {
+    renderer, scene, camera,
+    wallsGroup, floorGroup, roofGroup, ductsGroup, routesGroup, fixturesGroup,
+    orbit: { target: { x: 2, y: 1, z: 1.5 }, azimuth: Math.PI / 4, polar: Math.PI / 3.2, radius: 8 },
+  };
+  updateCameraFromOrbit();
+  resizeScene3D();
+}
+
+function resizeScene3D() {
+  if (!scene3d) return;
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  scene3d.renderer.setSize(w, h, false);
+  scene3d.camera.aspect = w / Math.max(1, h);
+  scene3d.camera.updateProjectionMatrix();
+  render3d();
+}
+window.addEventListener("resize", resizeScene3D);
+
+function updateCameraFromOrbit() {
+  if (!scene3d) return;
+  const o = scene3d.orbit;
+  o.polar = clamp(o.polar, 0.05, Math.PI - 0.05);
+  const x = o.target.x + o.radius * Math.sin(o.polar) * Math.sin(o.azimuth);
+  const y = o.target.y + o.radius * Math.cos(o.polar);
+  const z = o.target.z + o.radius * Math.sin(o.polar) * Math.cos(o.azimuth);
+  scene3d.camera.position.set(x, y, z);
+  scene3d.camera.lookAt(o.target.x, o.target.y, o.target.z);
+}
+
+function render3d() {
+  if (!scene3d) return;
+  scene3d.renderer.render(scene3d.scene, scene3d.camera);
+}
+
+function setQuickView3D(view) {
+  if (!scene3d) return;
+  const o = scene3d.orbit;
+  if (view === "top") { o.polar = 0.15; o.azimuth = 0; }
+  else if (view === "front") { o.polar = Math.PI / 2.1; o.azimuth = 0; }
+  else if (view === "iso") { o.polar = Math.PI / 3.2; o.azimuth = Math.PI / 4; }
+  updateCameraFromOrbit();
+  render3d();
+}
+
+function toggleRoofVisible() {
+  state.scene3d.showRoof = !state.scene3d.showRoof;
+  if (scene3d) scene3d.roofGroup.visible = state.scene3d.showRoof;
+  render3d();
+  renderScene3DPanel();
+}
+
+function toggleWallsVisible() {
+  state.scene3d.showWalls = !state.scene3d.showWalls;
+  if (scene3d) scene3d.wallsGroup.visible = state.scene3d.showWalls;
+  render3d();
+  renderScene3DPanel();
+}
+
+/* ---- жести: один палець обертає камеру, два — масштаб і панорама ---- */
+
+const pointers3d = new Map();
+let drag3dStart = null;
+let pinch3dStart = null;
+
+canvas3dEl.addEventListener("pointerdown", (e) => {
+  canvas3dEl.setPointerCapture(e.pointerId);
+  pointers3d.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (!scene3d) return;
+  if (pointers3d.size === 1) {
+    const p = [...pointers3d.values()][0];
+    drag3dStart = { x: p.x, y: p.y, azimuth: scene3d.orbit.azimuth, polar: scene3d.orbit.polar };
+  } else if (pointers3d.size === 2) {
+    const [a, b] = [...pointers3d.values()];
+    pinch3dStart = {
+      dist: Math.hypot(a.x - b.x, a.y - b.y),
+      mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+      radius: scene3d.orbit.radius,
+      target: { ...scene3d.orbit.target },
+    };
+    drag3dStart = null;
+  }
+});
+
+canvas3dEl.addEventListener("pointermove", (e) => {
+  if (!pointers3d.has(e.pointerId) || !scene3d) return;
+  pointers3d.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (pointers3d.size === 1 && drag3dStart) {
+    const p = [...pointers3d.values()][0];
+    const dx = p.x - drag3dStart.x, dy = p.y - drag3dStart.y;
+    scene3d.orbit.azimuth = drag3dStart.azimuth - dx * 0.01;
+    scene3d.orbit.polar = clamp(drag3dStart.polar - dy * 0.01, 0.05, Math.PI - 0.05);
+    updateCameraFromOrbit();
+    render3d();
+  } else if (pointers3d.size === 2 && pinch3dStart) {
+    const [a, b] = [...pointers3d.values()];
+    const dist = Math.hypot(a.x - b.x, a.y - b.y);
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+
+    const scale = pinch3dStart.dist / Math.max(1, dist);
+    scene3d.orbit.radius = clamp(pinch3dStart.radius * scale, 0.5, 60);
+
+    const dxPix = mid.x - pinch3dStart.mid.x, dyPix = mid.y - pinch3dStart.mid.y;
+    const panScale = scene3d.orbit.radius * 0.0018;
+    const az = scene3d.orbit.azimuth;
+    const rightX = Math.cos(az), rightZ = -Math.sin(az);
+    scene3d.orbit.target.x = pinch3dStart.target.x - dxPix * panScale * rightX;
+    scene3d.orbit.target.z = pinch3dStart.target.z - dxPix * panScale * rightZ;
+    scene3d.orbit.target.y = pinch3dStart.target.y + dyPix * panScale;
+
+    updateCameraFromOrbit();
+    render3d();
+  }
+});
+
+function endPointer3d(e) {
+  pointers3d.delete(e.pointerId);
+  if (pointers3d.size < 1) drag3dStart = null;
+  if (pointers3d.size < 2) pinch3dStart = null;
+}
+canvas3dEl.addEventListener("pointerup", endPointer3d);
+canvas3dEl.addEventListener("pointercancel", endPointer3d);
+
+canvas3dEl.addEventListener("wheel", (e) => {
+  if (!scene3d) return;
+  e.preventDefault();
+  scene3d.orbit.radius = clamp(scene3d.orbit.radius * Math.exp(e.deltaY * 0.001), 0.5, 60);
+  updateCameraFromOrbit();
+  render3d();
+}, { passive: false });
+
+/* ---- побудова геометрії з даних /api/scene3d ---- */
+
+function clearThreeGroup(group) {
+  while (group.children.length > 0) {
+    const child = group.children.pop();
+    group.remove(child);
+    if (child.geometry) child.geometry.dispose();
+    if (child.material) {
+      if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+      else child.material.dispose();
+    }
+  }
+}
+
+// Плитка (модуль 2) як текстура-патерн, а не окремі об'єкти — реальний
+// розмір плитки й фуги, повторюється по поверхні через RepeatWrapping.
+function buildTileTexture() {
+  const tiling = state.tiling;
+  if (!tiling) return null;
+  const tileW = Number(fieldVal("tile-width", 600));
+  const tileH = Number(fieldVal("tile-height", 600));
+  const groutW = Number(fieldVal("grout-width", 2));
+  const tileColor = fieldVal("tile-color", "#c9beac");
+  const groutColor = fieldVal("grout-color", "#8a8a8a");
+
+  const pxPerMm = 4;
+  const canvasEl = document.createElement("canvas");
+  canvasEl.width = Math.max(2, Math.round((tileW + groutW) * pxPerMm));
+  canvasEl.height = Math.max(2, Math.round((tileH + groutW) * pxPerMm));
+  const c2d = canvasEl.getContext("2d");
+  c2d.fillStyle = groutColor;
+  c2d.fillRect(0, 0, canvasEl.width, canvasEl.height);
+  c2d.fillStyle = tileColor;
+  c2d.fillRect(0, 0, tileW * pxPerMm, tileH * pxPerMm);
+
+  const texture = new THREE.CanvasTexture(canvasEl);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  return { texture, repeatUnitM: (tileW + groutW) / 1000, repeatUnitHM: (tileH + groutW) / 1000 };
+}
+
+function tileTextureAppliesTo(isFloor, wallIndex) {
+  if (!state.tiling) return false;
+  return isFloor ? state.selectedWallIndex === null : state.selectedWallIndex === wallIndex;
+}
+
+function buildWallMesh(wallData) {
+  const [x0, z0] = wallData.start;
+  const [x1, z1] = wallData.end;
+  const lengthM = wallData.length_mm / 1000;
+  const heightM = wallData.height_mm / 1000;
+  const thicknessM = wallData.thickness_mm / 1000;
+  const angle = Math.atan2(z1 - z0, x1 - x0);
+
+  const shape = new THREE.Shape();
+  shape.moveTo(0, 0);
+  shape.lineTo(lengthM, 0);
+  shape.lineTo(lengthM, heightM);
+  shape.lineTo(0, heightM);
+  shape.lineTo(0, 0);
+
+  for (const o of wallData.openings) {
+    const u0 = o.offset_mm / 1000, u1 = (o.offset_mm + o.width_mm) / 1000;
+    const v0 = o.sill_height_mm / 1000, v1 = (o.sill_height_mm + o.height_mm) / 1000;
+    const hole = new THREE.Path();
+    hole.moveTo(u0, v0);
+    hole.lineTo(u0, v1);
+    hole.lineTo(u1, v1);
+    hole.lineTo(u1, v0);
+    hole.lineTo(u0, v0);
+    shape.holes.push(hole);
+  }
+
+  const geometry = new THREE.ExtrudeGeometry(shape, { depth: thicknessM, bevelEnabled: false, curveSegments: 4 });
+  geometry.translate(0, 0, -thicknessM / 2);
+  geometry.rotateY(-angle);
+
+  const color = MATERIAL_CATEGORY_COLORS[wallData.material_category] ?? DEFAULT_WALL_COLOR;
+  const material = new THREE.MeshLambertMaterial({ color });
+  if (tileTextureAppliesTo(false, wallData.index)) {
+    const tile = buildTileTexture();
+    if (tile) {
+      tile.texture.repeat.set(lengthM / tile.repeatUnitM, heightM / tile.repeatUnitHM);
+      material.map = tile.texture;
+      material.color.set(0xffffff);
+    }
+  }
+
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(x0 / 1000, 0, z0 / 1000);
+  return mesh;
+}
+
+function buildFloorMesh(contour, thicknessM) {
+  const shape = new THREE.Shape(contour.map(([x, z]) => new THREE.Vector2(x / 1000, -z / 1000)));
+  const geometry = new THREE.ExtrudeGeometry(shape, { depth: thicknessM, bevelEnabled: false, curveSegments: 4 });
+  geometry.rotateX(-Math.PI / 2);
+  geometry.translate(0, -thicknessM, 0); // верх плити на y=0, під підлогою кімнати
+
+  const material = new THREE.MeshLambertMaterial({ color: 0xd9d2c7 });
+  if (tileTextureAppliesTo(true, null)) {
+    const tile = buildTileTexture();
+    if (tile) {
+      const bounds = boundsOfPoints(contour.map(([x, z]) => ({ x, z })));
+      const wM = (bounds.maxX - bounds.minX) / 1000, hM = (bounds.maxZ - bounds.minZ) / 1000;
+      tile.texture.repeat.set(wM / tile.repeatUnitM, hM / tile.repeatUnitHM);
+      material.map = tile.texture;
+      material.color.set(0xffffff);
+    }
+  }
+  return new THREE.Mesh(geometry, material);
+}
+
+function buildRoofMesh(faces) {
+  const positions = [];
+  const indices = [];
+  faces.forEach((facePoints) => {
+    const base = positions.length / 3;
+    facePoints.forEach(([x, y, z]) => positions.push(x / 1000, y / 1000, z / 1000));
+    for (let i = 1; i < facePoints.length - 1; i++) indices.push(base, base + i, base + i + 1);
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  const material = new THREE.MeshLambertMaterial({ color: ROOF_COLOR, side: THREE.DoubleSide });
+  return new THREE.Mesh(geometry, material);
+}
+
+function buildDuctMesh(duct) {
+  if (duct.points.length < 2) return null;
+  const ceilingM = 2.4; // орієнтовна висота прокладки повітропроводу, ближче до стелі
+  const points = duct.points.map(([x, z]) => new THREE.Vector3(x / 1000, ceilingM, z / 1000));
+  const path = new THREE.CurvePath();
+  for (let i = 0; i < points.length - 1; i++) path.add(new THREE.LineCurve3(points[i], points[i + 1]));
+  const diameterMm = duct.diameter_mm || Math.max(duct.width_mm, duct.height_mm);
+  const radiusM = Math.max(0.02, diameterMm / 2000);
+  const geometry = new THREE.TubeGeometry(path, Math.max(2, points.length * 3), radiusM, 6, false);
+  const material = new THREE.MeshLambertMaterial({ color: DUCT_COLOR });
+  return new THREE.Mesh(geometry, material);
+}
+
+function buildRouteLine(points2d) {
+  const heightM = 0.15; // умовна висота прокладки кабелю над підлогою
+  const pts = points2d.map(([x, z]) => new THREE.Vector3(x / 1000, heightM, z / 1000));
+  const geometry = new THREE.BufferGeometry().setFromPoints(pts);
+  const material = new THREE.LineBasicMaterial({ color: ROUTE_COLOR });
+  return new THREE.Line(geometry, material);
+}
+
+function buildFixtureMarker(position2d, ceilingHeightM) {
+  const geometry = new THREE.SphereGeometry(0.06, 8, 6);
+  const material = new THREE.MeshBasicMaterial({ color: FIXTURE_COLOR });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(position2d[0] / 1000, ceilingHeightM - 0.05, position2d[1] / 1000);
+  return mesh;
+}
+
+function rebuildScene3D(data) {
+  ensureThreeScene();
+  clearThreeGroup(scene3d.wallsGroup);
+  clearThreeGroup(scene3d.floorGroup);
+  clearThreeGroup(scene3d.roofGroup);
+  clearThreeGroup(scene3d.ductsGroup);
+  clearThreeGroup(scene3d.routesGroup);
+  clearThreeGroup(scene3d.fixturesGroup);
+
+  const room = data.room;
+  const wallHeightM = (room.walls[0]?.height_mm || 2700) / 1000;
+  const isFirstLoad = state.scene3d.data === null;
+
+  scene3d.floorGroup.add(buildFloorMesh(room.contour, data.floor_slab.thickness_mm / 1000));
+
+  room.walls.forEach((wallData) => scene3d.wallsGroup.add(buildWallMesh(wallData)));
+  scene3d.wallsGroup.visible = state.scene3d.showWalls;
+
+  if (data.roof) {
+    scene3d.roofGroup.add(buildRoofMesh(data.roof.faces));
+    state.scene3d.roofType = data.roof.type;
+    state.scene3d.roofSlope = data.roof.slope_deg;
+  } else {
+    state.scene3d.roofType = "NONE";
+  }
+  scene3d.roofGroup.visible = state.scene3d.showRoof;
+
+  data.ducts.forEach((duct) => {
+    const mesh = buildDuctMesh(duct);
+    if (mesh) scene3d.ductsGroup.add(mesh);
+  });
+
+  Object.values(data.electrical_routes).forEach((points) => scene3d.routesGroup.add(buildRouteLine(points)));
+
+  data.fixtures.forEach((fixture) => scene3d.fixturesGroup.add(buildFixtureMarker(fixture.position, wallHeightM)));
+
+  if (isFirstLoad) {
+    const bounds = boundsOfPoints(room.contour.map(([x, z]) => ({ x, z })));
+    const spanM = Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ) / 1000;
+    scene3d.orbit.target = {
+      x: (bounds.minX + bounds.maxX) / 2000,
+      y: wallHeightM / 2,
+      z: (bounds.minZ + bounds.maxZ) / 2000,
+    };
+    scene3d.orbit.radius = Math.max(3, spanM * 1.6);
+  }
+
+  state.scene3d.data = data;
+  updateCameraFromOrbit();
+  render3d();
+}
+
+async function refreshScene3D() {
+  if (!state.room) return;
+  try {
+    const data = await apiGet("/api/scene3d");
+    rebuildScene3D(data);
+  } catch (e) {
+    console.error(e);
+  }
+  renderScene3DPanel();
+}
+
+/* ---- дах і отвори (керування з панелі) ---- */
+
+async function setRoofSettings(patch) {
+  try {
+    await apiPost("/api/roof/settings", patch);
+    Object.assign(state.scene3d, patch.roof_type !== undefined ? { roofType: patch.roof_type } : {});
+    if (patch.slope_deg !== undefined) state.scene3d.roofSlope = patch.slope_deg;
+    await refreshScene3D();
+  } catch (e) {
+    alert("Не вдалося змінити дах: " + e.message);
+  }
+}
+
+async function addOpening3D(kind, wallIndex, offsetMm, sillMm, widthMm, heightMm) {
+  try {
+    await apiPost("/api/opening3d", {
+      wall_index: wallIndex, kind, offset_mm: offsetMm, sill_height_mm: sillMm, width_mm: widthMm, height_mm: heightMm,
+    });
+    await refreshScene3D();
+  } catch (e) {
+    alert("Не вдалося додати отвір: " + e.message);
+  }
+}
+
+async function deleteOpening3D(name) {
+  try {
+    await apiPost("/api/opening3d_delete", { name });
+    await refreshScene3D();
+  } catch (e) {
+    alert("Не вдалося видалити отвір: " + e.message);
+  }
+}
+
+function groupColor(name) {
+  const map = state.electrical.colorForGroup;
+  if (!map.has(name)) {
+    map.set(name, ELECTRICAL_PALETTE[map.size % ELECTRICAL_PALETTE.length]);
+  }
+  return map.get(name);
+}
+
+function kindGlyph(kind) {
+  return (POINT_KINDS.find(k => k.kind === kind) || {}).glyph || "?";
+}
+
+function kindLabel(kind) {
+  return (POINT_KINDS.find(k => k.kind === kind) || {}).label || kind;
+}
+
+/* ---------------------------------------------------------------------
+ * Побудова кімнати / перерахунок плитки
+ * ------------------------------------------------------------------- */
+
+async function finalizeRoom() {
+  if (state.drawing.length < 3) return;
+  try {
+    const room = await apiPost("/api/room", {
+      points: state.drawing.map(p => [p.x, p.z]),
+      wall_height: Number(fieldVal("room-height", 2700)),
+      wall_thickness: Number(fieldVal("room-thickness", 200)),
+      material_name: fieldVal("room-material", "цегла"),
+      room_name: fieldVal("room-name", ""),
+    });
+    state.room = room;
+    state.drawing = [];
+    state.selectedWallIndex = null;
+    state.tiling = null;
+    fitView(state.viewTop, room.contour.map(([x,z]) => ({x,z})));
+    renderPanel();
+    updateHint();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося побудувати кімнату: " + e.message);
+  }
+}
+
+function resetDrawing() {
+  state.room = null;
+  state.drawing = [];
+  state.selectedWallIndex = null;
+  state.tiling = null;
+  renderPanel();
+  updateHint();
+  redraw();
+}
+
+function selectSurface(wallIndexOrNull) {
+  state.selectedWallIndex = wallIndexOrNull;
+  state.tiling = null;
+  renderPanel();
+  recalcTiling();
+}
+
+async function recalcTiling() {
+  if (!state.room) return;
+  const surfaceSpec = state.selectedWallIndex === null ? "floor" : { wall_index: state.selectedWallIndex };
+  const payload = {
+    surface: surfaceSpec,
+    tile: {
+      width: Number(fieldVal("tile-width", 600)),
+      height: Number(fieldVal("tile-height", 600)),
+      name: fieldVal("tile-name", ""),
+      color: fieldVal("tile-color", "#c9beac"),
+    },
+    grout: {
+      width_mm: Number(fieldVal("grout-width", 2)),
+      color: fieldVal("grout-color", "#8a8a8a"),
+    },
+    layout: {
+      start: [state.layoutStart.x, state.layoutStart.z],
+      row_offset: fieldVal("row-offset", "NONE"),
+      angle: Number(fieldVal("angle", 0)),
+    },
+    tiles_per_package: Number(fieldVal("tiles-per-package", 4)),
+    waste_fraction: Number(fieldVal("waste-percent", 10)) / 100,
+  };
+  try {
+    const data = await apiPost("/api/tiling", payload);
+    state.tiling = data;
+    fitView(state.viewWall, data.surface.contour.map(([x,z]) => ({x,z})));
+    const reportEl = document.getElementById("report");
+    if (reportEl) reportEl.textContent = data.report_text;
+    updateStatsPanel(data);
+    updateHint();
+    redraw();
+  } catch (e) {
+    alert("Не вдалося порахувати покриття: " + e.message);
+  }
+}
+
+/* ---------------------------------------------------------------------
+ * Малювання: вид зверху
+ * ------------------------------------------------------------------- */
+
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.round(wrap.clientWidth * dpr));
+  canvas.height = Math.max(1, Math.round(wrap.clientHeight * dpr));
+  canvas.style.width = wrap.clientWidth + "px";
+  canvas.style.height = wrap.clientHeight + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // лише щільність пікселів, не world->screen
+  redraw();
+}
+window.addEventListener("resize", resizeCanvas);
+
+function drawGrid(view) {
+  const stepsMm = [50, 100, 200, 250, 500, 1000, 2000, 5000, 10000];
+  let step = stepsMm[0];
+  for (const s of stepsMm) { if (s * view.scale > 45) { step = s; break; } step = s; }
+  ctx.strokeStyle = "rgba(255,255,255,0.05)";
+  ctx.lineWidth = 1;
+  const topLeft = screenToWorld(0, 0, view);
+  const bottomRight = screenToWorld(wrap.clientWidth, wrap.clientHeight, view);
+  const xStart = Math.floor(topLeft.x / step) * step;
+  const xEnd = bottomRight.x;
+  for (let x = xStart; x <= xEnd; x += step) {
+    const s1 = worldToScreen(x, topLeft.z, view), s2 = worldToScreen(x, bottomRight.z, view);
+    ctx.beginPath(); ctx.moveTo(s1.x, s1.y); ctx.lineTo(s2.x, s2.y); ctx.stroke();
+  }
+  const zStart = Math.floor(bottomRight.z / step) * step;
+  const zEnd = topLeft.z;
+  for (let z = zStart; z <= zEnd; z += step) {
+    const s1 = worldToScreen(topLeft.x, z, view), s2 = worldToScreen(bottomRight.x, z, view);
+    ctx.beginPath(); ctx.moveTo(s1.x, s1.y); ctx.lineTo(s2.x, s2.y); ctx.stroke();
+  }
+}
+
+function polygonCentroid(pts) {
+  let x = 0, z = 0;
+  for (const p of pts) { x += p.x; z += p.z; }
+  return { x: x/pts.length, z: z/pts.length };
+}
+
+function drawTopView() {
+  const view = state.viewTop;
+  drawGrid(view);
+
+  if (!state.room) {
+    // контур, що малюється
+    if (state.drawing.length > 0) {
+      ctx.strokeStyle = "#4f8cff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      state.drawing.forEach((p, i) => {
+        const s = worldToScreen(p.x, p.z, view);
+        if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+      });
+      ctx.stroke();
+      state.drawing.forEach((p, i) => {
+        const s = worldToScreen(p.x, p.z, view);
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, i === 0 ? 7 : 5, 0, Math.PI*2);
+        ctx.fillStyle = i === 0 ? "#ffb454" : "#4f8cff";
+        ctx.fill();
+      });
+    }
+    return;
+  }
+
+  drawRoomPlan(view);
+}
+
+function drawRoomPlan(view) {
+  const contourPts = state.room.contour.map(([x,z]) => ({x,z}));
+  const centroid = polygonCentroid(contourPts);
+
+  // підлога
+  ctx.beginPath();
+  contourPts.forEach((p, i) => {
+    const s = worldToScreen(p.x, p.z, view);
+    if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+  });
+  ctx.closePath();
+  ctx.fillStyle = "rgba(120,150,190,0.10)";
+  ctx.fill();
+
+  // стіни (товщина)
+  state.room.walls.forEach((w, idx) => {
+    const a = { x: w.start[0], z: w.start[1] };
+    const b = { x: w.end[0], z: w.end[1] };
+    const dx = b.x-a.x, dz = b.z-a.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const nx = -dz/len, nz = dx/len;
+    const t = w.thickness_mm / 2;
+    const corners = [
+      {x: a.x + nx*t, z: a.z + nz*t}, {x: b.x + nx*t, z: b.z + nz*t},
+      {x: b.x - nx*t, z: b.z - nz*t}, {x: a.x - nx*t, z: a.z - nz*t},
+    ];
+    ctx.beginPath();
+    corners.forEach((p, i) => {
+      const s = worldToScreen(p.x, p.z, view);
+      if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+    });
+    ctx.closePath();
+    const selected = state.selectedWallIndex === idx;
+    ctx.fillStyle = selected ? "rgba(79,140,255,0.55)" : "rgba(170,150,120,0.85)";
+    ctx.fill();
+    ctx.strokeStyle = selected ? "#4f8cff" : "rgba(0,0,0,0.4)";
+    ctx.lineWidth = selected ? 2 : 1;
+    ctx.stroke();
+
+    // підпис довжини стіни
+    const mid = { x: (a.x+b.x)/2, z: (a.z+b.z)/2 };
+    const perp = outwardPerp({x:dx/len, z:dz/len}, mid, centroid);
+    const labelWorld = { x: mid.x + perp.x*(t+220), z: mid.z + perp.z*(t+220) };
+    const s = worldToScreen(labelWorld.x, labelWorld.z, view);
+    let angle = Math.atan2(worldToScreen(b.x,b.z,view).y - worldToScreen(a.x,a.z,view).y,
+                            worldToScreen(b.x,b.z,view).x - worldToScreen(a.x,a.z,view).x);
+    if (angle > Math.PI/2 || angle < -Math.PI/2) angle += Math.PI;
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(angle);
+    ctx.fillStyle = "#e8e6e1";
+    ctx.font = "12px -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${Math.round(w.length_mm)} мм`, 0, 0);
+    ctx.restore();
+  });
+}
+
+function outwardPerp(dir, mid, centroid) {
+  const perp = { x: -dir.z, z: dir.x };
+  const toMid = { x: mid.x - centroid.x, z: mid.z - centroid.z };
+  const dot = perp.x*toMid.x + perp.z*toMid.z;
+  return dot >= 0 ? perp : { x: -perp.x, z: -perp.z };
+}
+
+/* ---------------------------------------------------------------------
+ * Малювання: електрика (поверх плану кімнати з модуля 3)
+ * ------------------------------------------------------------------- */
+
+function drawMarker(s, color, glyph) {
+  ctx.beginPath();
+  ctx.arc(s.x, s.y, 10, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 10px -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(glyph, s.x, s.y);
+}
+
+function crossSectionLineWidth(cs) {
+  return clamp(1.5 + cs * 0.55, 2, 16); // монотонна шкала: 1.5мм²≈2.3px ... 25мм²≈15.2px
+}
+
+function drawElectricalView() {
+  const view = state.viewTop;
+  drawGrid(view);
+
+  if (state.room) drawRoomPlan(view);
+
+  const data = state.electrical.data;
+  if (!data) return;
+
+  const crossSectionByGroup = {};
+  (state.electrical.report?.groups || []).forEach(g => { crossSectionByGroup[g.group_name] = g.cross_section_mm2; });
+
+  // траси
+  for (const [pointName, pts] of Object.entries(data.routes)) {
+    const point = data.points.find(p => p.name === pointName);
+    const groupName = point ? point.group : null;
+    const color = groupName ? groupColor(groupName) : "#888";
+    const cs = groupName ? crossSectionByGroup[groupName] : null;
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = cs ? crossSectionLineWidth(cs) : 2;
+    ctx.setLineDash(cs ? [] : [7, 5]); // пунктир = групу ще не порахували (немає перерізу)
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    pts.forEach(([x, z], i) => {
+      const s = worldToScreen(x, z, view);
+      if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // траса, що малюється зараз
+  if (state.electrical.drawingRoute) {
+    ctx.strokeStyle = "#ffb454";
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    state.electrical.drawingRoute.points.forEach((p, i) => {
+      const s = worldToScreen(p.x, p.z, view);
+      if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // точки споживання
+  for (const p of data.points) {
+    const s = worldToScreen(p.position[0], p.position[1], view);
+    const color = p.group ? groupColor(p.group) : "#777";
+    drawMarker(s, color, kindGlyph(p.kind));
+  }
+
+  // щиток — завжди поверх, білим
+  if (data.panel) {
+    const s = worldToScreen(data.panel.position[0], data.panel.position[1], view);
+    drawMarker(s, "#ffffff", "Щ");
+  }
+}
+
+/* ---------------------------------------------------------------------
+ * Малювання: освітлення (9.1)
+ * ------------------------------------------------------------------- */
+
+function drawLightingView() {
+  const view = state.viewTop;
+  drawGrid(view);
+  if (!state.room) return;
+  drawRoomPlan(view);
+
+  const data = state.lighting.data;
+  if (!data || !data.fixtures.length) return;
+
+  // якісна "теплова карта" зон освітленості (не фізичний розрахунок —
+  // справжнє число лк рахує ядро й показане в панелі окремо).
+  ctx.save();
+  ctx.beginPath();
+  state.room.contour.forEach(([x, z], i) => {
+    const s = worldToScreen(x, z, view);
+    if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+  });
+  ctx.closePath();
+  ctx.clip();
+
+  const cellPx = 16;
+  for (let sy = 0; sy < wrap.clientHeight; sy += cellPx) {
+    for (let sx = 0; sx < wrap.clientWidth; sx += cellPx) {
+      const w = screenToWorld(sx + cellPx / 2, sy + cellPx / 2, view);
+      let score = 0;
+      for (const f of data.fixtures) {
+        const dx = (w.x - f.position[0]) / 1000, dz = (w.z - f.position[1]) / 1000;
+        score += (f.luminous_flux_lm / 1000) / (1 + dx * dx + dz * dz);
+      }
+      score = 1 - Math.exp(-score / 5);
+      ctx.fillStyle = lightingHeatColor(score);
+      ctx.fillRect(sx, sy, cellPx, cellPx);
+    }
+  }
+  ctx.restore();
+
+  ctx.beginPath();
+  state.room.contour.forEach(([x, z], i) => {
+    const s = worldToScreen(x, z, view);
+    if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+  });
+  ctx.closePath();
+  ctx.strokeStyle = "#e8e6e1";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  for (const f of data.fixtures) {
+    const s = worldToScreen(f.position[0], f.position[1], view);
+    drawMarker(s, "#ffe08a", "С");
+  }
+}
+
+/* ---------------------------------------------------------------------
+ * Малювання: вентиляція (9.2)
+ * ------------------------------------------------------------------- */
+
+function drawVentilationView() {
+  const view = state.viewTop;
+  drawGrid(view);
+  if (state.room) drawRoomPlan(view);
+
+  const data = state.ventilation.data;
+  if (data) {
+    for (const duct of data.ducts) {
+      const sizeMm = duct.diameter_mm || Math.max(duct.width_mm, duct.height_mm);
+      ctx.strokeStyle = "#7ad6e0";
+      ctx.lineWidth = clamp(1 + sizeMm / 25, 2, 20);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      duct.points.forEach(([x, z], i) => {
+        const s = worldToScreen(x, z, view);
+        if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+      });
+      ctx.stroke();
+    }
+  }
+
+  if (state.ventilation.drawingDuct) {
+    ctx.strokeStyle = "#ffb454";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    state.ventilation.drawingDuct.points.forEach((p, i) => {
+      const s = worldToScreen(p.x, p.z, view);
+      if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+/* ---------------------------------------------------------------------
+ * Малювання: тепло (9.4)
+ * ------------------------------------------------------------------- */
+
+function drawHeatView() {
+  const view = state.viewTop;
+  drawGrid(view);
+  if (!state.room) return;
+  drawRoomPlan(view);
+
+  const wallIdx = state.heat.selectedWallIndex;
+  const data = state.heat.data;
+  if (wallIdx === null || !data) return;
+  const wall = data.walls[wallIdx];
+  if (!wall || !wall.layers.length) return;
+
+  const totalThickness = wall.layers.reduce((sum, l) => sum + l.thickness_mm, 0);
+  const barLeft = 40, barRight = wrap.clientWidth - 40;
+  const barWidth = Math.max(100, barRight - barLeft);
+  const barTop = wrap.clientHeight - 90, barHeight = 50;
+
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillRect(barLeft - 10, barTop - 26, barWidth + 20, barHeight + 42);
+
+  let x = barLeft;
+  const palette = ["#c9beac", "#8ecae6", "#ffb454", "#9b7edb", "#5ad17a", "#e05fd0"];
+  wall.layers.forEach((layer, i) => {
+    const w = (layer.thickness_mm / totalThickness) * barWidth;
+    ctx.fillStyle = palette[i % palette.length];
+    ctx.fillRect(x, barTop, w, barHeight);
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, barTop, w, barHeight);
+    if (w > 28) {
+      ctx.fillStyle = "#0a0a0a";
+      ctx.font = "10px -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${layer.thickness_mm.toFixed(0)} мм`, x + w / 2, barTop + barHeight / 2);
+    }
+    x += w;
+  });
+
+  ctx.fillStyle = "#e8e6e1";
+  ctx.font = "10px -apple-system, sans-serif";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  const names = wall.layers.map(l => l.material_name).join(" · ");
+  ctx.fillText(`Розріз стіни (приміщення → вулиця): ${names}`, barLeft, barTop - 10);
+}
+
+/* ---------------------------------------------------------------------
+ * Малювання: пожежна безпека (9.5)
+ * ------------------------------------------------------------------- */
+
+function drawFireView() {
+  const view = state.viewTop;
+  drawGrid(view);
+  if (state.room) drawRoomPlan(view);
+
+  const data = state.fire.data;
+  if (!data) return;
+
+  const radiusMm = data.coverage_radius_m * 1000;
+  for (const d of data.detectors) {
+    const s = worldToScreen(d.position[0], d.position[1], view);
+    const rPx = radiusMm * view.scale;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, rPx, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,80,80,0.10)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,80,80,0.5)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  if (data.panel_position && data.detectors.length > 0) {
+    const loopPoints = [data.panel_position, ...data.detectors.map(d => d.position), data.panel_position];
+    ctx.strokeStyle = "#ff6b6b";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    loopPoints.forEach(([x, z], i) => {
+      const s = worldToScreen(x, z, view);
+      if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  for (const d of data.detectors) {
+    const s = worldToScreen(d.position[0], d.position[1], view);
+    drawMarker(s, "#ff6b6b", "Д");
+  }
+  if (data.panel_position) {
+    const s = worldToScreen(data.panel_position[0], data.panel_position[1], view);
+    drawMarker(s, "#ffffff", "Щ");
+  }
+}
+
+/* ---------------------------------------------------------------------
+ * Малювання: розгортка стіни/підлоги + плитка
+ * ------------------------------------------------------------------- */
+
+function drawWallView() {
+  const view = state.viewWall;
+  drawGrid(view);
+
+  if (!state.room) return;
+
+  const data = state.tiling;
+  const contour = data ? data.surface.contour.map(([x,z]) => ({x,z})) : null;
+  if (!contour) return;
+
+  // контур поверхні
+  ctx.save();
+  ctx.beginPath();
+  contour.forEach((p, i) => {
+    const s = worldToScreen(p.x, p.z, view);
+    if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+  });
+  ctx.closePath();
+  ctx.clip();
+
+  // фон = колір фуги (просвічує в проміжках між плитками)
+  ctx.fillStyle = data.grout_color || "#8a8a8a";
+  ctx.fillRect(0, 0, wrap.clientWidth, wrap.clientHeight);
+
+  const tileColor = data.tile_color || "#c9beac";
+  const cutColor = mixColor(tileColor, "#ff9d3d", 0.4);
+
+  for (const piece of data.placements) {
+    ctx.beginPath();
+    piece.points.forEach(([x,z], i) => {
+      const s = worldToScreen(x, z, view);
+      if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+    });
+    ctx.closePath();
+    ctx.fillStyle = piece.kind === "cut" ? cutColor : tileColor;
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(0,0,0,0.35)";
+    ctx.stroke();
+
+    if (piece.kind === "cut" && piece.label) {
+      const c = polygonCentroid(piece.points.map(([x,z]) => ({x,z})));
+      const s = worldToScreen(c.x, c.z, view);
+      ctx.fillStyle = "#1a1300";
+      ctx.font = "bold 11px -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(piece.label, s.x, s.y);
+    }
+  }
+  ctx.restore();
+
+  // контур поверхні зверху (обвід)
+  ctx.beginPath();
+  contour.forEach((p, i) => {
+    const s = worldToScreen(p.x, p.z, view);
+    if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+  });
+  ctx.closePath();
+  ctx.strokeStyle = "#e8e6e1";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // позначка стартової точки розкладки
+  const startScreen = worldToScreen(state.layoutStart.x, state.layoutStart.z, view);
+  ctx.beginPath();
+  ctx.arc(startScreen.x, startScreen.y, 6, 0, Math.PI*2);
+  ctx.fillStyle = "#ffb454";
+  ctx.fill();
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+function redraw() {
+  if (state.tab === "3d") { render3d(); return; }
+  ctx.clearRect(0, 0, wrap.clientWidth, wrap.clientHeight);
+  if (state.tab === "top") drawTopView();
+  else if (state.tab === "wall") drawWallView();
+  else if (state.tab === "electrical") drawElectricalView();
+  else if (state.tab === "lighting") drawLightingView();
+  else if (state.tab === "ventilation") drawVentilationView();
+  else if (state.tab === "heat") drawHeatView();
+  else if (state.tab === "fire") drawFireView();
+}
+
+/* ---------------------------------------------------------------------
+ * Панель збоку
+ * ------------------------------------------------------------------- */
+
+function fieldVal(id, fallback) {
+  const node = document.getElementById(id);
+  if (!node) return fallback;
+  return node.value === "" ? fallback : node.value;
+}
+
+function syncLayoutStartInputs() {
+  const sx = document.getElementById("layout-start-x");
+  const sz = document.getElementById("layout-start-z");
+  if (sx) sx.value = state.layoutStart.x;
+  if (sz) sz.value = state.layoutStart.z;
+}
+
+function setTab(tab) {
+  state.tab = tab;
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+
+  const is3d = tab === "3d";
+  canvas.style.display = is3d ? "none" : "block";
+  canvas3dEl.style.display = is3d ? "block" : "none";
+  document.getElementById("view-buttons").style.display = is3d ? "flex" : "none";
+
+  if (is3d) {
+    ensureThreeScene();
+    resizeScene3D();
+    refreshScene3D();
+  }
+
+  renderPanel();
+  if (tab === "wall") applyPendingTilingRestore();
+  updateHint();
+  redraw();
+}
+document.querySelectorAll(".tab-btn").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+document.querySelectorAll("#view-buttons button").forEach(b => b.addEventListener("click", () => setQuickView3D(b.dataset.view)));
+
+function updateHint() {
+  let text = "";
+  if (state.tab === "top") {
+    if (!state.room) {
+      if (state.drawing.length === 0) text = "Тапніть, щоб поставити першу точку контуру кімнати.";
+      else if (state.drawing.length < 3) text = "Тапніть, щоб додати наступну точку. Кут прив'язується до 15°.";
+      else text = "Додайте ще точку або тапніть по першій (жовтій), щоб замкнути контур.";
+    } else {
+      text = "Тапніть по стіні, щоб побачити її розгортку й порахувати плитку.";
+    }
+  } else if (state.tab === "wall") {
+    text = state.room ? "Тапніть на поверхні, щоб поставити стартову точку розкладки плитки." : "Спочатку намалюйте кімнату на вкладці «Вид зверху».";
+  } else if (state.tab === "electrical") {
+    const el5 = state.electrical;
+    if (!state.room) {
+      text = "Спочатку намалюйте кімнату на вкладці «Вид зверху».";
+    } else if (el5.drawingRoute) {
+      const target = el5.drawingRoute.targetName;
+      text = `Малюємо трасу до «${target}»: тапніть, щоб додати вигин (90°), або тапніть по точці «${target}», щоб завершити.`;
+    } else if (el5.placingKind) {
+      text = `Тапніть на плані, щоб поставити: ${kindLabel(el5.placingKind).toLowerCase()}.`;
+    } else {
+      text = "Оберіть тип точки в панелі й тапніть на плані, щоб її поставити.";
+    }
+  } else if (state.tab === "lighting") {
+    if (!state.room) text = "Спочатку намалюйте кімнату на вкладці «Вид зверху».";
+    else if (state.lighting.placingKind) text = "Тапніть на плані, щоб поставити світильник.";
+    else text = "Оберіть тип світильника в панелі й тапніть на плані, щоб його поставити.";
+  } else if (state.tab === "ventilation") {
+    if (!state.room) text = "Спочатку намалюйте кімнату на вкладці «Вид зверху».";
+    else if (state.ventilation.drawingDuct) text = "Тапніть, щоб додати вигин повітропроводу (кут прив'язується до 90°). Завершіть кнопкою в панелі.";
+    else text = "Натисніть «Малювати повітропровід» у панелі, щоб почати.";
+  } else if (state.tab === "heat") {
+    if (!state.room) text = "Спочатку намалюйте кімнату на вкладці «Вид зверху».";
+    else text = "Тапніть по стіні, щоб редагувати її конструкцію (шари матеріалів).";
+  } else if (state.tab === "fire") {
+    text = state.room ? "Натисніть «Розставити автоматично» в панелі." : "Спочатку намалюйте кімнату на вкладці «Вид зверху».";
+  } else if (state.tab === "3d") {
+    text = state.room
+      ? "Один палець — обертання камери. Два пальці — масштаб і панорама."
+      : "Спочатку намалюйте кімнату на вкладці «Вид зверху».";
+  }
+  hintEl.textContent = text;
+}
+
+function renderPanel() {
+  panelEl.innerHTML = "";
+  if (state.tab === "top") renderTopPanel();
+  else if (state.tab === "wall") renderWallPanel();
+  else if (state.tab === "electrical") renderElectricalPanel();
+  else if (state.tab === "lighting") renderLightingPanel();
+  else if (state.tab === "ventilation") renderVentilationPanel();
+  else if (state.tab === "heat") renderHeatPanel();
+  else if (state.tab === "fire") renderFirePanel();
+  else if (state.tab === "3d") renderScene3DPanel();
+}
+
+function renderTopPanel() {
+  if (!state.room) {
+    panelEl.appendChild(el(`
+      <section>
+        <h2>Нова кімната</h2>
+        <div class="field"><label>Назва</label><input id="room-name" type="text" placeholder="Кімната"></div>
+        <div class="row2">
+          <div class="field"><label>Висота стін, мм</label><input id="room-height" type="number" value="2700"></div>
+          <div class="field"><label>Товщина стін, мм</label><input id="room-thickness" type="number" value="200"></div>
+        </div>
+        <div class="field"><label>Матеріал стін</label><input id="room-material" type="text" value="цегла"></div>
+        <p class="muted">Малюйте контур на канві: тап ставить точку (кут прив'язується до 15°), тап по першій точці замикає контур.</p>
+      </section>
+    `));
+    return;
+  }
+
+  const section = el(`
+    <section>
+      <h2>Кімната${state.room.name ? " «" + state.room.name + "»" : ""}</h2>
+      <div class="stat-grid">
+        <div class="k">Площа підлоги</div><div class="v">${state.room.floor_area_m2.toFixed(2)} м²</div>
+        <div class="k">Периметр</div><div class="v">${(state.room.perimeter_mm/1000).toFixed(2)} м</div>
+      </div>
+      <hr class="sep">
+      <h2 style="margin-top:10px">Стіни</h2>
+      <div id="wall-list"></div>
+      <button class="secondary block" id="btn-new-room" style="margin-top:10px">Намалювати нову кімнату</button>
+    </section>
+  `);
+  panelEl.appendChild(section);
+
+  const list = section.querySelector("#wall-list");
+  state.room.walls.forEach((w, idx) => {
+    const item = el(`
+      <div class="wall-item ${state.selectedWallIndex === idx ? "selected" : ""}">
+        <span>Стіна ${idx+1}</span>
+        <span class="muted">${Math.round(w.length_mm)}×${Math.round(w.thickness_mm)} мм, ${w.material}</span>
+      </div>
+    `);
+    item.addEventListener("click", () => { selectSurface(idx); setTab("wall"); });
+    list.appendChild(item);
+  });
+
+  section.querySelector("#btn-new-room").addEventListener("click", resetDrawing);
+}
+
+function renderWallPanel() {
+  if (!state.room) {
+    panelEl.appendChild(el(`<section><p class="muted">Спочатку намалюйте кімнату на вкладці «Вид зверху».</p></section>`));
+    return;
+  }
+
+  const options = ['<option value="floor">Підлога</option>']
+    .concat(state.room.walls.map((w, i) => `<option value="${i}">Стіна ${i+1} (${Math.round(w.length_mm)} мм)</option>`))
+    .join("");
+  const selectedValue = state.selectedWallIndex === null ? "floor" : String(state.selectedWallIndex);
+
+  const section = el(`
+    <section>
+      <h2>Поверхня</h2>
+      <div class="field">
+        <label>Що покриваємо плиткою</label>
+        <select id="surface-select">${options}</select>
+      </div>
+    </section>
+  `);
+  panelEl.appendChild(section);
+  section.querySelector("#surface-select").value = selectedValue;
+  section.querySelector("#surface-select").addEventListener("change", (e) => {
+    const v = e.target.value;
+    selectSurface(v === "floor" ? null : Number(v));
+  });
+
+  panelEl.appendChild(el(`
+    <section>
+      <h2>Плитка</h2>
+      <div class="row2">
+        <div class="field"><label>Ширина, мм</label><input id="tile-width" type="number" value="600"></div>
+        <div class="field"><label>Висота, мм</label><input id="tile-height" type="number" value="600"></div>
+      </div>
+      <div class="field"><label>Назва</label><input id="tile-name" type="text" value="Керамограніт"></div>
+      <div class="field"><label>Колір</label><input id="tile-color" type="color" value="#c9beac"></div>
+    </section>
+  `));
+
+  panelEl.appendChild(el(`
+    <section>
+      <h2>Фуга</h2>
+      <div class="row2">
+        <div class="field"><label>Ширина, мм</label><input id="grout-width" type="number" step="0.5" value="2"></div>
+        <div class="field"><label>Колір</label><input id="grout-color" type="color" value="#8a8a8a"></div>
+      </div>
+    </section>
+  `));
+
+  panelEl.appendChild(el(`
+    <section>
+      <h2>Розкладка</h2>
+      <div class="row2">
+        <div class="field"><label>Старт U, мм</label><input id="layout-start-x" type="number" value="${state.layoutStart.x}"></div>
+        <div class="field"><label>Старт V, мм</label><input id="layout-start-z" type="number" value="${state.layoutStart.z}"></div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Зсув рядів</label>
+          <select id="row-offset">
+            <option value="NONE">0%</option>
+            <option value="HALF">50%</option>
+            <option value="THIRD">1/3</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Кут</label>
+          <select id="angle">
+            <option value="0">0°</option>
+            <option value="45">45°</option>
+          </select>
+        </div>
+      </div>
+      <p class="muted">Або тапніть просто на розгортці — стартова точка переставиться туди.</p>
+    </section>
+  `));
+
+  panelEl.appendChild(el(`
+    <section>
+      <h2>Замовлення</h2>
+      <div class="row2">
+        <div class="field"><label>Плиток в упаковці</label><input id="tiles-per-package" type="number" value="4"></div>
+        <div class="field"><label>Запас, %</label><input id="waste-percent" type="number" value="10"></div>
+      </div>
+      <button class="primary block" id="btn-calc">Порахувати покриття</button>
+    </section>
+  `));
+
+  document.getElementById("layout-start-x").addEventListener("change", (e) => { state.layoutStart.x = Number(e.target.value)||0; recalcTiling(); });
+  document.getElementById("layout-start-z").addEventListener("change", (e) => { state.layoutStart.z = Number(e.target.value)||0; recalcTiling(); });
+  document.getElementById("btn-calc").addEventListener("click", recalcTiling);
+
+  const statsSection = el(`
+    <section>
+      <h2>Результат (модуль 2)</h2>
+      <div id="stats" class="stat-grid"></div>
+      <div class="legend">
+        <span><span class="swatch" style="background:#c9beac"></span>ціла плитка</span>
+        <span><span class="swatch" style="background:#ff9d3d"></span>підрізка</span>
+      </div>
+      <pre id="report">Натисніть «Порахувати покриття».</pre>
+    </section>
+  `);
+  panelEl.appendChild(statsSection);
+
+  if (state.tiling) {
+    updateStatsPanel(state.tiling);
+    document.getElementById("report").textContent = state.tiling.report_text;
+  }
+
+  if (!state.tiling) recalcTiling();
+}
+
+function updateStatsPanel(data) {
+  const statsEl = document.getElementById("stats");
+  if (!statsEl) return;
+  statsEl.innerHTML = `
+    <div class="k">Цілих плиток</div><div class="v">${data.whole_tiles_count}</div>
+    <div class="k">Підрізок</div><div class="v">${data.cuts_count}</div>
+    <div class="k">Разом плиток</div><div class="v">${data.total_tiles_needed}</div>
+    <div class="k">Упаковок</div><div class="v">${data.packages_needed}</div>
+    <div class="k">Запас (окремо)</div><div class="v">${data.reserve_tiles}</div>
+    <div class="k">Площа фуги</div><div class="v">${data.grout_area_m2.toFixed(3)} м²</div>
+  `;
+}
+
+/* ---------------------------------------------------------------------
+ * Панель: електрика (модуль 5)
+ * ------------------------------------------------------------------- */
+
+function buildPendingPointItem(point) {
+  const wrap = document.createElement("div");
+  wrap.className = "point-item";
+  wrap.style.flexDirection = "column";
+  wrap.style.alignItems = "stretch";
+  wrap.style.gap = "6px";
+
+  const head = document.createElement("div");
+  head.style.display = "flex";
+  head.style.alignItems = "center";
+  head.style.gap = "8px";
+  const dot = document.createElement("span");
+  dot.className = "dot";
+  dot.style.background = point.group ? groupColor(point.group) : "#777";
+  const label = document.createElement("span");
+  label.className = "grow";
+  label.innerHTML =
+    `<div class="name">${point.name}</div>` +
+    `<div class="sub">${point.kind_label}, ${point.power_w.toFixed(0)} Вт` +
+    (point.group ? ` · група «${point.group}»` : "") + `</div>`;
+  const delBtn = document.createElement("button");
+  delBtn.className = "icon-btn danger";
+  delBtn.textContent = "✕";
+  delBtn.title = "Видалити точку";
+  delBtn.addEventListener("click", () => deleteElectricalPoint(point.name));
+  head.append(dot, label, delBtn);
+  wrap.appendChild(head);
+
+  if (!point.group) {
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.gap = "6px";
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.placeholder = "Назва групи";
+    nameInput.style.flex = "1";
+    nameInput.style.minWidth = "0";
+    const phaseSelect = document.createElement("select");
+    phaseSelect.style.width = "auto";
+    phaseSelect.innerHTML = `<option value="SINGLE">230В</option><option value="THREE">400В</option>`;
+    const csInput = document.createElement("input");
+    csInput.type = "number";
+    csInput.step = "0.5";
+    csInput.title = "Мінімальний переріз, мм²";
+    csInput.style.width = "56px";
+    csInput.value = (point.kind === "SOCKET" || point.kind === "BOILER") ? "2.5" : (point.kind === "STOVE" ? "6" : "1.5");
+    const assignBtn = document.createElement("button");
+    assignBtn.className = "primary";
+    assignBtn.textContent = "OK";
+    assignBtn.addEventListener("click", () => assignGroup(point.name, nameInput.value.trim(), phaseSelect.value, csInput.value));
+    row.append(nameInput, phaseSelect, csInput, assignBtn);
+    wrap.appendChild(row);
+  }
+
+  if (!point.has_route) {
+    const routeBtn = document.createElement("button");
+    routeBtn.className = "secondary block";
+    routeBtn.textContent = "Малювати трасу від щитка";
+    routeBtn.addEventListener("click", () => startRoute(point.name));
+    wrap.appendChild(routeBtn);
+  }
+
+  return wrap;
+}
+
+function renderElectricalPanel() {
+  if (!state.room) {
+    panelEl.appendChild(el(`<section><p class="muted">Спочатку намалюйте кімнату на вкладці «Вид зверху».</p></section>`));
+    return;
+  }
+
+  const el5 = state.electrical;
+
+  // --- розстановка точок ---
+  const placeSection = el(`
+    <section>
+      <h2>Точка на плані</h2>
+      <div class="kind-grid"></div>
+      <p class="muted">Оберіть тип і тапніть на плані. Щиток — один на план, повторний тап переставляє його
+      (усі траси автоматично перерахуються від нового місця).</p>
+    </section>
+  `);
+  const grid = placeSection.querySelector(".kind-grid");
+  POINT_KINDS.forEach(({ kind, label }) => {
+    const btn = document.createElement("button");
+    btn.className = "kind-btn" + (el5.placingKind === kind ? " active" : "");
+    btn.textContent = label;
+    btn.addEventListener("click", () => {
+      el5.placingKind = el5.placingKind === kind ? null : kind;
+      el5.drawingRoute = null;
+      renderElectricalPanel();
+      updateHint();
+    });
+    grid.appendChild(btn);
+  });
+  panelEl.appendChild(placeSection);
+
+  // --- малювання траси (якщо активне) ---
+  if (el5.drawingRoute) {
+    panelEl.appendChild(el(`
+      <section>
+        <h2>Малювання траси</h2>
+        <div class="route-live">
+          До «<b>${el5.drawingRoute.targetName}</b>»<br>
+          Довжина зараз: <b>${routeDrawingLengthM().toFixed(2)} м</b><br>
+          Вигинів: ${el5.drawingRoute.points.length - 1}
+        </div>
+        <div class="row2" style="margin-top:8px">
+          <button class="secondary" id="btn-cancel-route">Скасувати</button>
+          <button class="primary" id="btn-finish-route">Завершити на точці</button>
+        </div>
+      </section>
+    `));
+    panelEl.querySelector("#btn-cancel-route").addEventListener("click", cancelRoute);
+    panelEl.querySelector("#btn-finish-route").addEventListener("click", finishRoute);
+  }
+
+  const data = el5.data;
+  const points = data ? data.points : [];
+  const pending = points.filter(p => !p.group || !p.has_route);
+  const reportGroups = el5.report ? el5.report.groups : [];
+
+  // --- точки, що потребують уваги ---
+  if (pending.length > 0) {
+    const section = el(`<section><h2>Точки, що потребують уваги</h2><div id="pending-list"></div></section>`);
+    panelEl.appendChild(section);
+    const list = section.querySelector("#pending-list");
+    pending.forEach(p => list.appendChild(buildPendingPointItem(p)));
+  }
+
+  // --- групи (розраховані ядром, модуль 4) ---
+  if (reportGroups.length > 0) {
+    const section = el(`<section><h2>Групи</h2><div id="group-list"></div></section>`);
+    panelEl.appendChild(section);
+    const list = section.querySelector("#group-list");
+    reportGroups.forEach(g => {
+      const members = points.filter(p => p.group === g.group_name);
+      const card = el(`
+        <div class="wall-item" style="flex-direction:column;align-items:stretch;gap:6px;cursor:default;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="dot" style="background:${groupColor(g.group_name)}"></span>
+            <b class="grow">${g.group_name}</b>
+            <span class="muted">${g.phase === "THREE" ? "400 В" : "230 В"}</span>
+          </div>
+          <div class="stat-grid">
+            <div class="k">Потужність</div><div class="v">${g.total_power_w.toFixed(0)} Вт</div>
+            <div class="k">Струм</div><div class="v">${g.design_current_a.toFixed(2)} А</div>
+            <div class="k">Автомат</div><div class="v">${g.breaker_rating_a.toFixed(0)} А</div>
+            <div class="k">Переріз</div><div class="v">${g.cross_section_mm2.toFixed(1)} мм²</div>
+            <div class="k">Падіння напруги</div><div class="v">${g.voltage_drop_percent.toFixed(2)}%</div>
+            <div class="k">ПЗВ</div><div class="v">${g.rcd_required ? "потрібен" : "не обов'язк."}</div>
+          </div>
+          <div class="muted" style="font-size:11px">
+            ${members.map(m => m.name + (m.has_route ? "" : " (без траси — поки не враховано)")).join(", ")}
+          </div>
+        </div>
+      `);
+      list.appendChild(card);
+    });
+  }
+
+  // --- звіт і експорт ---
+  const reportSection = el(`
+    <section>
+      <h2>Звіт (модуль 4)</h2>
+      <div class="legend">
+        <span><span class="swatch" style="background:#4f8cff"></span>колір = група</span>
+        <span>товщина лінії = переріз жили</span>
+        <span>пунктир = група ще не порахована</span>
+      </div>
+      <pre id="electrical-report">${el5.report && el5.report.report_text ? el5.report.report_text : "Ще немає жодної завершеної групи (точка + траса + прив'язка до групи)."}</pre>
+      <div class="row2">
+        <button class="secondary" id="btn-refresh-report">Оновити звіт</button>
+        <button class="primary" id="btn-export-report">Експорт .txt</button>
+      </div>
+      <button class="secondary block" id="btn-reset-electrical" style="margin-top:8px">Скинути електрику</button>
+    </section>
+  `);
+  panelEl.appendChild(reportSection);
+  reportSection.querySelector("#btn-refresh-report").addEventListener("click", async () => {
+    await refreshElectricalReport();
+    renderElectricalPanel();
+    redraw();
+  });
+  reportSection.querySelector("#btn-export-report").addEventListener("click", exportElectricalReport);
+  reportSection.querySelector("#btn-reset-electrical").addEventListener("click", resetElectrical);
+}
+
+/* ---------------------------------------------------------------------
+ * Панель: освітлення (9.1)
+ * ------------------------------------------------------------------- */
+
+function renderLightingPanel() {
+  if (!state.room) {
+    panelEl.appendChild(el(`<section><p class="muted">Спочатку намалюйте кімнату на вкладці «Вид зверху».</p></section>`));
+    return;
+  }
+  const lt = state.lighting;
+
+  const purposeSection = el(`
+    <section>
+      <h2>Призначення кімнати</h2>
+      <div class="field">
+        <select id="lighting-purpose">${ROOM_PURPOSES.map(p => `<option value="${p.kind}">${p.label}</option>`).join("")}</select>
+      </div>
+      <p class="muted">Норма — орієнтовно, EN 12464-1.</p>
+    </section>
+  `);
+  panelEl.appendChild(purposeSection);
+  purposeSection.querySelector("#lighting-purpose").value = lt.data ? lt.data.room_purpose : "LIVING_ROOM";
+  purposeSection.querySelector("#lighting-purpose").addEventListener("change", (e) => setLightingPurpose(e.target.value));
+
+  const placeSection = el(`
+    <section>
+      <h2>Світильник</h2>
+      <div class="kind-grid"></div>
+      <div class="row2">
+        <div class="field"><label>Потік, лм</label><input id="lighting-flux" type="number" value="800"></div>
+        <div class="field"><label>Потужність, Вт</label><input id="lighting-power" type="number" value="8"></div>
+      </div>
+      <p class="muted">Оберіть тип і тапніть на плані, щоб поставити.</p>
+    </section>
+  `);
+  panelEl.appendChild(placeSection);
+  const kindGrid = placeSection.querySelector(".kind-grid");
+  LIGHTING_KINDS.forEach(({ kind, label }) => {
+    const btn = document.createElement("button");
+    btn.className = "kind-btn" + (lt.placingKind === kind ? " active" : "");
+    btn.textContent = label;
+    btn.addEventListener("click", () => {
+      lt.placingKind = lt.placingKind === kind ? null : kind;
+      renderLightingPanel();
+      updateHint();
+    });
+    kindGrid.appendChild(btn);
+  });
+
+  const data = lt.data;
+  if (!data) {
+    refreshLightingState().then(() => { renderLightingPanel(); redraw(); });
+    return;
+  }
+
+  if (data.fixtures.length > 0) {
+    const listSection = el(`<section><h2>Світильники (${data.fixtures.length})</h2><div id="fixture-list"></div></section>`);
+    panelEl.appendChild(listSection);
+    const list = listSection.querySelector("#fixture-list");
+    data.fixtures.forEach((f) => {
+      const item = el(`
+        <div class="point-item">
+          <span class="grow"><div class="name">${f.name}</div><div class="sub">${f.kind_label}, ${f.luminous_flux_lm.toFixed(0)} лм, ${f.power_w.toFixed(0)} Вт</div></span>
+          <button class="icon-btn danger">✕</button>
+        </div>
+      `);
+      item.querySelector("button").addEventListener("click", () => deleteLightingFixture(f.name));
+      list.appendChild(item);
+    });
+  }
+
+  const resultSection = el(`
+    <section>
+      <h2>Результат (модуль 8.1)</h2>
+      <div class="stat-grid">
+        <div class="k">Норма</div><div class="v">${data.target_lux.toFixed(0)} лк</div>
+        <div class="k">Розрахована освітленість</div><div class="v">${data.achieved_lux.toFixed(0)} лк</div>
+        <div class="k">Норма виконана</div><div class="v">${data.meets_target ? "так" : "ні"}</div>
+        <div class="k">Сумарна потужність</div><div class="v">${data.total_power_w.toFixed(0)} Вт</div>
+      </div>
+      ${data.deficit_flux_lm != null ? `<p class="muted">Не вистачає ще ≈${data.deficit_flux_lm.toFixed(0)} лм світлового потоку.</p>` : ""}
+      <div class="legend">
+        <span><span class="swatch" style="background:hsl(220,80%,15%)"></span>темніше</span>
+        <span><span class="swatch" style="background:hsl(0,80%,30%)"></span>яскравіше</span>
+      </div>
+      <pre id="report">${data.report_text}</pre>
+      <div class="row2">
+        <button class="secondary" id="btn-refresh-lighting">Оновити</button>
+        <button class="primary" id="btn-export-lighting">Експорт .txt</button>
+      </div>
+      <button class="secondary block" id="btn-reset-lighting" style="margin-top:8px">Скинути освітлення</button>
+    </section>
+  `);
+  panelEl.appendChild(resultSection);
+  resultSection.querySelector("#btn-refresh-lighting").addEventListener("click", async () => {
+    await refreshLightingState(); renderLightingPanel(); redraw();
+  });
+  resultSection.querySelector("#btn-export-lighting").addEventListener("click", exportLightingReport);
+  resultSection.querySelector("#btn-reset-lighting").addEventListener("click", resetLighting);
+}
+
+/* ---------------------------------------------------------------------
+ * Панель: вентиляція (9.2)
+ * ------------------------------------------------------------------- */
+
+function renderVentilationPanel() {
+  if (!state.room) {
+    panelEl.appendChild(el(`<section><p class="muted">Спочатку намалюйте кімнату на вкладці «Вид зверху».</p></section>`));
+    return;
+  }
+  const vt = state.ventilation;
+
+  const purposeSection = el(`
+    <section>
+      <h2>Призначення приміщення</h2>
+      <div class="field">
+        <select id="ventilation-room-kind">${VENTILATION_ROOM_KINDS.map(k => `<option value="${k.kind}">${k.label}</option>`).join("")}</select>
+      </div>
+    </section>
+  `);
+  panelEl.appendChild(purposeSection);
+  purposeSection.querySelector("#ventilation-room-kind").value = vt.data ? vt.data.room_kind : "LIVING_ROOM";
+  purposeSection.querySelector("#ventilation-room-kind").addEventListener("change", (e) => setVentilationRoomKind(e.target.value));
+
+  if (vt.drawingDuct) {
+    const pts = vt.drawingDuct.points;
+    let length = 0;
+    for (let i = 0; i < pts.length - 1; i++) length += Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].z - pts[i].z);
+    const drawSection = el(`
+      <section>
+        <h2>Малювання повітропроводу</h2>
+        <div class="route-live">Точок: ${pts.length}<br>Довжина зараз: <b>${(length / 1000).toFixed(2)} м</b></div>
+        <div class="row2" style="margin-top:8px">
+          <button class="secondary" id="btn-cancel-duct">Скасувати</button>
+          <button class="primary" id="btn-finish-duct">Завершити</button>
+        </div>
+      </section>
+    `);
+    panelEl.appendChild(drawSection);
+    drawSection.querySelector("#btn-cancel-duct").addEventListener("click", cancelDuctDrawing);
+    drawSection.querySelector("#btn-finish-duct").addEventListener("click", finishDuctDrawing);
+  } else {
+    const newSection = el(`
+      <section>
+        <h2>Новий повітропровід</h2>
+        <div class="field">
+          <label>Форма перерізу</label>
+          <select id="duct-shape">
+            <option value="ROUND">круглий</option>
+            <option value="RECTANGULAR">прямокутний</option>
+          </select>
+        </div>
+        <div class="row2" id="duct-round-fields">
+          <div class="field"><label>Діаметр, мм</label><input id="duct-diameter" type="number" value="100"></div>
+        </div>
+        <div class="row2" id="duct-rect-fields" style="display:none">
+          <div class="field"><label>Ширина, мм</label><input id="duct-width" type="number" value="200"></div>
+          <div class="field"><label>Висота, мм</label><input id="duct-height" type="number" value="100"></div>
+        </div>
+        <button class="primary block" id="btn-start-duct">Малювати повітропровід</button>
+      </section>
+    `);
+    panelEl.appendChild(newSection);
+    const shapeSelect = newSection.querySelector("#duct-shape");
+    shapeSelect.addEventListener("change", () => {
+      const isRound = shapeSelect.value === "ROUND";
+      newSection.querySelector("#duct-round-fields").style.display = isRound ? "grid" : "none";
+      newSection.querySelector("#duct-rect-fields").style.display = isRound ? "none" : "grid";
+    });
+    newSection.querySelector("#btn-start-duct").addEventListener("click", startDuctDrawing);
+  }
+
+  const data = vt.data;
+  if (!data) {
+    refreshVentilationState().then(() => { renderVentilationPanel(); redraw(); });
+    return;
+  }
+
+  if (data.ducts.length > 0) {
+    const listSection = el(`<section><h2>Повітропроводи (${data.ducts.length})</h2><div id="duct-list"></div></section>`);
+    panelEl.appendChild(listSection);
+    const list = listSection.querySelector("#duct-list");
+    data.ducts.forEach((d) => {
+      const size = d.diameter_mm ? `⌀${d.diameter_mm.toFixed(0)} мм` : `${d.width_mm.toFixed(0)}×${d.height_mm.toFixed(0)} мм`;
+      const item = el(`
+        <div class="point-item">
+          <span class="grow"><div class="name">${d.name}</div><div class="sub">${d.shape_label}, ${size}, ${d.length_m.toFixed(2)} м, ${d.velocity_m_s.toFixed(2)} м/с</div></span>
+          <button class="icon-btn danger">✕</button>
+        </div>
+      `);
+      item.querySelector("button").addEventListener("click", () => deleteDuct(d.name));
+      list.appendChild(item);
+    });
+  }
+
+  const resultSection = el(`
+    <section>
+      <h2>Результат (модуль 8.2)</h2>
+      <div class="stat-grid">
+        <div class="k">Потрібний повітрообмін</div><div class="v">${data.required_airflow_m3_h.toFixed(0)} м³/год</div>
+        <div class="k">Сумарні втрати тиску</div><div class="v">${data.total_pressure_loss_pa.toFixed(1)} Па</div>
+        <div class="k">Вентилятор</div><div class="v">${data.fan ? data.fan.name : "—"}</div>
+      </div>
+      <pre id="report">${data.report_text}</pre>
+      <div class="row2">
+        <button class="secondary" id="btn-refresh-vent">Оновити</button>
+        <button class="primary" id="btn-export-vent">Експорт .txt</button>
+      </div>
+      <button class="secondary block" id="btn-reset-vent" style="margin-top:8px">Скинути вентиляцію</button>
+    </section>
+  `);
+  panelEl.appendChild(resultSection);
+  resultSection.querySelector("#btn-refresh-vent").addEventListener("click", async () => {
+    await refreshVentilationState(); renderVentilationPanel(); redraw();
+  });
+  resultSection.querySelector("#btn-export-vent").addEventListener("click", exportVentilationReport);
+  resultSection.querySelector("#btn-reset-vent").addEventListener("click", resetVentilation);
+}
+
+/* ---------------------------------------------------------------------
+ * Панель: тепло (9.4)
+ * ------------------------------------------------------------------- */
+
+function renderHeatPanel() {
+  if (!state.room) {
+    panelEl.appendChild(el(`<section><p class="muted">Спочатку намалюйте кімнату на вкладці «Вид зверху».</p></section>`));
+    return;
+  }
+  if (!state.heat.materials) {
+    refreshHeatMaterials().then(() => renderHeatPanel());
+    panelEl.appendChild(el(`<section><p class="muted">Завантаження бази матеріалів…</p></section>`));
+    return;
+  }
+
+  const ht = state.heat;
+  const data = ht.data;
+
+  const wallListSection = el(`<section><h2>Стіни</h2><div id="heat-wall-list"></div></section>`);
+  panelEl.appendChild(wallListSection);
+  const wallList = wallListSection.querySelector("#heat-wall-list");
+  state.room.walls.forEach((w, idx) => {
+    const info = data ? data.walls[idx] : null;
+    const status = info && info.has_layers ? (info.meets_wt2021 ? "відповідає нормі" : "не відповідає нормі") : "без конструкції";
+    const item = el(`
+      <div class="wall-item ${ht.selectedWallIndex === idx ? "selected" : ""}">
+        <span>Стіна ${idx + 1}</span>
+        <span class="muted">${status}</span>
+      </div>
+    `);
+    item.addEventListener("click", () => selectHeatWall(idx));
+    wallList.appendChild(item);
+  });
+
+  const settingsSection = el(`
+    <section>
+      <h2>Умови розрахунку</h2>
+      <div class="row2">
+        <div class="field"><label>Т внутр., °C</label><input id="heat-indoor-temp" type="number" value="${data ? data.indoor_temp_c : 20}"></div>
+        <div class="field"><label>Вологість, %</label><input id="heat-indoor-rh" type="number" value="${data ? data.indoor_rh_percent : 50}"></div>
+      </div>
+      <div class="field">
+        <label>Кліматична зона (PN-EN 12831, орієнтовно)</label>
+        <select id="heat-zone">${CLIMATE_ZONES.map((z) => `<option value="${z}">${z.replace("ZONE_", "")}</option>`).join("")}</select>
+      </div>
+    </section>
+  `);
+  panelEl.appendChild(settingsSection);
+  settingsSection.querySelector("#heat-zone").value = data ? data.climate_zone : "ZONE_III";
+  settingsSection.querySelector("#heat-indoor-temp").addEventListener("change", (e) => updateHeatSettings({ indoor_temp_c: Number(e.target.value) }));
+  settingsSection.querySelector("#heat-indoor-rh").addEventListener("change", (e) => updateHeatSettings({ indoor_rh_percent: Number(e.target.value) }));
+  settingsSection.querySelector("#heat-zone").addEventListener("change", (e) => updateHeatSettings({ climate_zone: e.target.value }));
+
+  if (!data) {
+    refreshHeatState().then(() => { renderHeatPanel(); redraw(); });
+    return;
+  }
+
+  if (ht.selectedWallIndex === null) {
+    panelEl.appendChild(el(`<section><p class="muted">Тапніть по стіні на плані (або в списку вище), щоб редагувати її конструкцію.</p></section>`));
+    return;
+  }
+
+  const wallData = data.walls[ht.selectedWallIndex];
+  const layersSection = el(`
+    <section>
+      <h2>Шари стіни ${ht.selectedWallIndex + 1} (від приміщення назовні)</h2>
+      <div id="heat-layer-list"></div>
+      <div class="row2" style="margin-top:6px">
+        <select id="heat-material-select">${state.heat.materials.map((m) => `<option value="${m.name}">${m.name} (λ=${m.thermal_conductivity_w_mk.toFixed(3)})</option>`).join("")}</select>
+        <input id="heat-thickness" type="number" placeholder="товщина, мм" value="100">
+      </div>
+      <button class="primary block" id="btn-add-layer" style="margin-top:6px">Додати шар</button>
+    </section>
+  `);
+  panelEl.appendChild(layersSection);
+  const layerList = layersSection.querySelector("#heat-layer-list");
+  wallData.layers.forEach((layer, idx) => {
+    const item = el(`
+      <div class="point-item">
+        <span class="grow"><div class="name">${layer.material_name}</div><div class="sub">${layer.thickness_mm.toFixed(0)} мм</div></span>
+        <button class="icon-btn danger">✕</button>
+      </div>
+    `);
+    item.querySelector("button").addEventListener("click", () => removeHeatLayer(idx));
+    layerList.appendChild(item);
+  });
+  layersSection.querySelector("#btn-add-layer").addEventListener("click", () => {
+    const materialName = layersSection.querySelector("#heat-material-select").value;
+    const thickness = Number(layersSection.querySelector("#heat-thickness").value);
+    addHeatLayer(materialName, thickness);
+  });
+
+  if (wallData.has_layers) {
+    const resultSection = el(`
+      <section>
+        <h2>Результат (модуль 8.4)</h2>
+        <div class="stat-grid">
+          <div class="k">Опір R</div><div class="v">${wallData.r_value_m2k_w.toFixed(3)} м²·К/Вт</div>
+          <div class="k">U</div><div class="v">${wallData.u_value_w_m2k.toFixed(3)} Вт/(м²·К)</div>
+          <div class="k">Норма WT2021</div><div class="v">≤${data.max_u_wt2021.toFixed(2)}</div>
+          <div class="k">Відповідає</div><div class="v">${wallData.meets_wt2021 ? "так" : "ні"}</div>
+          <div class="k">Тепловтрати стіни</div><div class="v">${wallData.heat_loss_w.toFixed(0)} Вт</div>
+        </div>
+        ${
+          wallData.condensation_warnings.length
+            ? `<p class="muted">⚠ ${wallData.condensation_warnings.join("; ")}</p>`
+            : '<p class="muted">Ризик конденсату не виявлено.</p>'
+        }
+        <pre id="report">${data.report_text}</pre>
+        <div class="row2">
+          <button class="secondary" id="btn-refresh-heat">Оновити</button>
+          <button class="primary" id="btn-export-heat">Експорт .txt</button>
+        </div>
+        <button class="secondary block" id="btn-reset-heat" style="margin-top:8px">Скинути все утеплення</button>
+      </section>
+    `);
+    panelEl.appendChild(resultSection);
+    resultSection.querySelector("#btn-refresh-heat").addEventListener("click", async () => {
+      await refreshHeatState(); renderHeatPanel(); redraw();
+    });
+    resultSection.querySelector("#btn-export-heat").addEventListener("click", exportHeatReport);
+    resultSection.querySelector("#btn-reset-heat").addEventListener("click", resetHeat);
+  }
+}
+
+/* ---------------------------------------------------------------------
+ * Панель: пожежна безпека (9.5)
+ * ------------------------------------------------------------------- */
+
+const FIRE_DETECTOR_KINDS = [
+  { kind: "SMOKE", label: "Димовий" },
+  { kind: "HEAT", label: "Тепловий" },
+  { kind: "CO", label: "Чадного газу" },
+];
+
+function renderFirePanel() {
+  if (!state.room) {
+    panelEl.appendChild(el(`<section><p class="muted">Спочатку намалюйте кімнату на вкладці «Вид зверху».</p></section>`));
+    return;
+  }
+  const data = state.fire.data;
+
+  const settingsSection = el(`
+    <section>
+      <h2>Тип датчика</h2>
+      <div class="field">
+        <select id="fire-kind">${FIRE_DETECTOR_KINDS.map((k) => `<option value="${k.kind}">${k.label}</option>`).join("")}</select>
+      </div>
+      <button class="primary block" id="btn-auto-place" style="margin-top:6px">Розставити автоматично</button>
+      <p class="muted">Площа покриття/відстань — орієнтовно, за нормами модуля 8.5.</p>
+    </section>
+  `);
+  panelEl.appendChild(settingsSection);
+  settingsSection.querySelector("#fire-kind").value = data ? data.detector_kind : "SMOKE";
+  settingsSection.querySelector("#fire-kind").addEventListener("change", (e) => setFireDetectorKind(e.target.value));
+  settingsSection.querySelector("#btn-auto-place").addEventListener("click", autoPlaceDetectors);
+
+  if (!data) {
+    refreshFireState().then(() => { renderFirePanel(); redraw(); });
+    return;
+  }
+
+  if (data.detectors.length > 0) {
+    const listSection = el(`<section><h2>Датчики (${data.detectors.length})</h2><div id="fire-list"></div></section>`);
+    panelEl.appendChild(listSection);
+    const list = listSection.querySelector("#fire-list");
+    data.detectors.forEach((d) => {
+      list.appendChild(el(`<div class="point-item"><span class="grow">${d.name}</span></div>`));
+    });
+  }
+
+  const resultSection = el(`
+    <section>
+      <h2>Результат (модуль 8.5)</h2>
+      <div class="stat-grid">
+        <div class="k">Кількість датчиків</div><div class="v">${data.detectors.length}</div>
+        <div class="k">Радіус покриття</div><div class="v">~${data.coverage_radius_m.toFixed(1)} м</div>
+        <div class="k">Довжина шлейфу</div><div class="v">${data.loop_length_m != null ? data.loop_length_m.toFixed(2) + " м" : "—"}</div>
+      </div>
+      ${data.loop_length_m == null ? '<p class="muted">Поставте щиток на вкладці «Електрика», щоб порахувати шлейф.</p>' : ""}
+      <pre id="report">${data.report_text}</pre>
+      <div class="row2">
+        <button class="secondary" id="btn-refresh-fire">Оновити</button>
+        <button class="primary" id="btn-export-fire">Експорт .txt</button>
+      </div>
+      <button class="secondary block" id="btn-reset-fire" style="margin-top:8px">Скинути датчики</button>
+    </section>
+  `);
+  panelEl.appendChild(resultSection);
+  resultSection.querySelector("#btn-refresh-fire").addEventListener("click", async () => {
+    await refreshFireState(); renderFirePanel(); redraw();
+  });
+  resultSection.querySelector("#btn-export-fire").addEventListener("click", exportFireReport);
+  resultSection.querySelector("#btn-reset-fire").addEventListener("click", resetFire);
+}
+
+/* ---------------------------------------------------------------------
+ * Панель: 3D-перегляд (модуль 11)
+ * ------------------------------------------------------------------- */
+
+function renderScene3DPanel() {
+  if (!state.room) {
+    panelEl.appendChild(el(`<section><p class="muted">Спочатку намалюйте кімнату на вкладці «Вид зверху».</p></section>`));
+    return;
+  }
+
+  const s3 = state.scene3d;
+
+  const roofSection = el(`
+    <section>
+      <h2>Дах</h2>
+      <div class="field">
+        <select id="roof-type">
+          <option value="NONE">без даху</option>
+          <option value="SHED">односхилий</option>
+          <option value="GABLE">двосхилий</option>
+        </select>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Кут нахилу, °</label><input id="roof-slope" type="number" value="${s3.roofSlope}"></div>
+        <div class="field"><label>Сторона/вісь</label><select id="roof-side"></select></div>
+      </div>
+    </section>
+  `);
+  panelEl.appendChild(roofSection);
+  const roofTypeSelect = roofSection.querySelector("#roof-type");
+  roofTypeSelect.value = s3.roofType;
+  const sideSelect = roofSection.querySelector("#roof-side");
+  function fillRoofSideOptions() {
+    sideSelect.innerHTML =
+      roofTypeSelect.value === "SHED"
+        ? ["south", "north", "west", "east"].map((v) => `<option value="${v}">${v}</option>`).join("")
+        : ["x", "z"].map((v) => `<option value="${v}">вздовж ${v}</option>`).join("");
+  }
+  fillRoofSideOptions();
+  roofTypeSelect.addEventListener("change", () => {
+    fillRoofSideOptions();
+    const patch = { roof_type: roofTypeSelect.value };
+    if (roofTypeSelect.value === "SHED") patch.low_side = sideSelect.value;
+    if (roofTypeSelect.value === "GABLE") patch.ridge_along = sideSelect.value;
+    setRoofSettings(patch);
+  });
+  roofSection.querySelector("#roof-slope").addEventListener("change", (e) =>
+    setRoofSettings({ slope_deg: Number(e.target.value) })
+  );
+  sideSelect.addEventListener("change", () => {
+    const patch = roofTypeSelect.value === "SHED" ? { low_side: sideSelect.value } : { ridge_along: sideSelect.value };
+    setRoofSettings(patch);
+  });
+
+  const visSection = el(`
+    <section>
+      <h2>Показ</h2>
+      <div class="row2">
+        <button class="secondary" id="btn-toggle-roof">${s3.showRoof ? "Сховати дах" : "Показати дах"}</button>
+        <button class="secondary" id="btn-toggle-walls">${s3.showWalls ? "Сховати стіни" : "Показати стіни"}</button>
+      </div>
+      <p class="muted">Швидкі види — кнопки над сценою («Зверху», «Спереду», «Ізометрія»).</p>
+    </section>
+  `);
+  panelEl.appendChild(visSection);
+  visSection.querySelector("#btn-toggle-roof").addEventListener("click", toggleRoofVisible);
+  visSection.querySelector("#btn-toggle-walls").addEventListener("click", toggleWallsVisible);
+
+  const wallOptions = state.room.walls
+    .map((w, i) => `<option value="${i}">Стіна ${i + 1} (${Math.round(w.length_mm)} мм)</option>`)
+    .join("");
+  const openingSection = el(`
+    <section>
+      <h2>Вікна й двері</h2>
+      <div class="field"><label>Стіна</label><select id="opening-wall">${wallOptions}</select></div>
+      <div class="row2">
+        <div class="field"><label>Тип</label>
+          <select id="opening-kind"><option value="WINDOW">вікно</option><option value="DOOR">двері</option></select>
+        </div>
+        <div class="field"><label>Відступ, мм</label><input id="opening-offset" type="number" value="500"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Підвіконня, мм</label><input id="opening-sill" type="number" value="900"></div>
+        <div class="field"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Ширина, мм</label><input id="opening-width" type="number" value="1200"></div>
+        <div class="field"><label>Висота, мм</label><input id="opening-height" type="number" value="1400"></div>
+      </div>
+      <button class="primary block" id="btn-add-opening">Додати</button>
+      <div id="opening-list" style="margin-top:8px"></div>
+    </section>
+  `);
+  panelEl.appendChild(openingSection);
+
+  const kindSelectEl = openingSection.querySelector("#opening-kind");
+  const sillInput = openingSection.querySelector("#opening-sill");
+  kindSelectEl.addEventListener("change", () => {
+    sillInput.value = kindSelectEl.value === "DOOR" ? 0 : 900;
+  });
+
+  openingSection.querySelector("#btn-add-opening").addEventListener("click", () => {
+    addOpening3D(
+      kindSelectEl.value,
+      Number(openingSection.querySelector("#opening-wall").value),
+      Number(openingSection.querySelector("#opening-offset").value),
+      Number(sillInput.value),
+      Number(openingSection.querySelector("#opening-width").value),
+      Number(openingSection.querySelector("#opening-height").value)
+    );
+  });
+
+  const openingList = openingSection.querySelector("#opening-list");
+  if (s3.data) {
+    s3.data.room.walls.forEach((w) => {
+      w.openings.forEach((o) => {
+        const item = el(`
+          <div class="point-item">
+            <span class="grow"><div class="name">${o.name}</div><div class="sub">стіна ${w.index + 1}, ${o.width_mm.toFixed(0)}×${o.height_mm.toFixed(0)} мм</div></span>
+            <button class="icon-btn danger">✕</button>
+          </div>
+        `);
+        item.querySelector("button").addEventListener("click", () => deleteOpening3D(o.name));
+        openingList.appendChild(item);
+      });
+    });
+  }
+
+  panelEl.appendChild(el(`
+    <section>
+      <h2>Плитка на сцені</h2>
+      <p class="muted">${
+        state.tiling
+          ? "Патерн плитки з вкладки «Розгортка/плитка» накладається на відповідну поверхню як текстура — реальний розмір і колір фуги."
+          : "Порахуйте плитку на вкладці «Розгортка/плитка» — тоді її патерн з'явиться і тут."
+      }</p>
+    </section>
+  `));
+
+  const triCount = scene3d && scene3d.renderer ? scene3d.renderer.info.render.triangles : 0;
+  panelEl.appendChild(el(`
+    <section>
+      <h2>Продуктивність</h2>
+      <div class="stat-grid">
+        <div class="k">Трикутників у кадрі</div><div class="v">${triCount}</div>
+      </div>
+      <p class="muted">Плитка малюється текстурою-патерном, а не окремими об'єктами.</p>
+    </section>
+  `));
+}
+
+/* ---------------------------------------------------------------------
+ * Модуль 14: файл проєкту (Android-застосунок або десктопний браузер)
+ *
+ * Серверна частина стану (кімната, проводка, освітлення/вентиляція/
+ * тепло/пожежна безпека, дах і отвори) береться через /api/project/export
+ * і /api/project/import (web/project_io.py) — суворий, повний round-trip.
+ *
+ * Плитка (модуль 2) на сервері не зберігається як стан (кожен розрахунок
+ * самостійний) — її поля живуть лише в HTML-полях вкладки «Розгортка/
+ * плитка», тож зберігаються/відновлюються окремо, найкраще зусилля:
+ * якщо вкладка не відкрита в момент збереження, поля просто лишать
+ * типові значення за замовчуванням при наступному відкритті — не
+ * критична втрата (кілька цифр, а не структура кімнати).
+ * ------------------------------------------------------------------- */
+
+const TILING_FIELD_IDS = [
+  "tile-width", "tile-height", "tile-name", "tile-color",
+  "grout-width", "grout-color", "row-offset", "angle",
+  "tiles-per-package", "waste-percent",
+];
+
+function collectTilingSettings() {
+  const settings = {};
+  for (const id of TILING_FIELD_IDS) {
+    const el = document.getElementById(id);
+    if (el) settings[id] = el.value;
+  }
+  return settings;
+}
+
+function applyTilingSettings(settings) {
+  if (!settings) return;
+  for (const [id, value] of Object.entries(settings)) {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  }
+}
+
+function applyPendingTilingRestore() {
+  const raw = sessionStorage.getItem("kovadlo_pending_tiling_settings");
+  if (!raw) return;
+  try { applyTilingSettings(JSON.parse(raw)); } catch (e) { /* пошкоджені дані — просто ігноруємо */ }
+  sessionStorage.removeItem("kovadlo_pending_tiling_settings");
+}
+
+async function buildProjectFileJson() {
+  const server = await apiGet("/api/project/export");
+  return JSON.stringify(
+    { format: "kovadlo-project-full", version: 1, server, client: { tiling_settings: collectTilingSettings() } },
+    null, 2
+  );
+}
+
+async function applyProjectFileJson(jsonText) {
+  const data = JSON.parse(jsonText);
+  if (data.format !== "kovadlo-project-full") throw new Error("Не файл проєкту Ковадла (невідомий формат)");
+  await apiPost("/api/project/import", data.server);
+  if (data.client && data.client.tiling_settings) {
+    sessionStorage.setItem("kovadlo_pending_tiling_settings", JSON.stringify(data.client.tiling_settings));
+  }
+  // Повне перезавантаження сторінки — найнадійніший спосіб гарантовано
+  // підхопити щойно імпортований стан сервера в усіх вкладках одразу,
+  // без ризику пропустити якийсь закешований на клієнті шматок стану.
+  location.reload();
+}
+
+async function saveProjectToFile() {
+  try {
+    const json = await buildProjectFileJson();
+    if (window.KovadloNative && window.KovadloNative.saveProject) {
+      // Android: збереження через Storage Access Framework (ProjectFileBridge.kt).
+      window.KovadloNative.saveProject(json, "kovadlo-project.json");
+    } else {
+      // Десктопний браузер — те саме завантаження Blob, що й для звітів.
+      const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "kovadlo-project.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+  } catch (e) {
+    alert("Не вдалося зберегти проєкт: " + e.message);
+  }
+}
+
+function openProjectFromFile() {
+  if (window.KovadloNative && window.KovadloNative.openProject) {
+    window.KovadloNative.openProject();
+  } else {
+    document.getElementById("project-file-input").click();
+  }
+}
+
+document.getElementById("project-file-input").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => applyProjectFileJson(reader.result).catch(err => alert("Не вдалося відкрити проєкт: " + err.message));
+  reader.readAsText(file);
+  e.target.value = "";
+});
+
+// Виклики з Kotlin (ProjectFileBridge.kt) після діалогу SAF.
+window.onKovadloSaveResult = function (ok, error) {
+  if (!ok && error) alert("Не вдалося зберегти проєкт: " + error);
+};
+window.onKovadloOpenResult = function (ok, jsonText, error) {
+  if (!ok) { if (error) alert("Не вдалося відкрити проєкт: " + error); return; }
+  applyProjectFileJson(jsonText).catch(err => alert("Не вдалося відкрити проєкт: " + err.message));
+};
+
+/* ---------------------------------------------------------------------
+ * Старт
+ * ------------------------------------------------------------------- */
+
+async function init() {
+  renderPanel();
+  updateHint();
+  resizeCanvas();
+  try {
+    const room = await apiGet("/api/room");
+    state.room = room;
+    fitView(state.viewTop, room.contour.map(([x,z]) => ({x,z})));
+  } catch (e) {
+    // кімнати ще немає — це нормальний стан на старті
+  }
+  await refreshElectricalState();
+  await refreshElectricalReport();
+  renderPanel();
+  updateHint();
+  redraw();
+}
+init();
+</script>
+</body>
+</html>

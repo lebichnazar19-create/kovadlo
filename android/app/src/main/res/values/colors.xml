@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Темно-сіра "сталь" — колір ковадла, і тон, наближений до
+         фону вкладки 3D (модуль 11), щоб перехід зі splash в застосунок
+         не "блимав" контрастом. -->
+    <color name="kovadlo_anvil">#2B2E33</color>
+    <color name="kovadlo_spark">#E8A33D</color>
+    <color name="white">#FFFFFF</color>
+</resources>

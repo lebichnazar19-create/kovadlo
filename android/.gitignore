@@ -1,0 +1,10 @@
+# Машинно-залежне — регенерується локально, не коміститься.
+local.properties
+.gradle/
+build/
+app/build/
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/

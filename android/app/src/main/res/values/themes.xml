@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="Theme.Kovadlo" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/kovadlo_anvil</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="android:statusBarColor" tools:targetApi="21">@color/kovadlo_anvil</item>
+        <item name="android:windowBackground">@color/kovadlo_anvil</item>
+    </style>
+
+    <!-- Splash-екран (AndroidX SplashScreen — сумісний з Android 12+
+         системним splash API і працює як звичайний theme-based splash
+         на старіших версіях, аж до minSdk 24). Іконка + фон, без
+         анімації, щоб не тягнути додаткові ресурси. -->
+    <style name="Theme.Kovadlo.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/kovadlo_anvil</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/kovadlo_anvil</item>
+        <item name="postSplashScreenTheme">@style/Theme.Kovadlo</item>
+    </style>
+</resources>

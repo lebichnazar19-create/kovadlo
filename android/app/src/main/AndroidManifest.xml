@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        Запис у сховище — лише для експорту звітів/проєктів на старих
+        Android (≤ API 28, до scoped storage): там ця дозволка справді
+        потрібна для прямого запису у спільну пам'ять. Починаючи з
+        Android 10 (API 29) вона нічого не дає (scoped storage все одно
+        блокує вільний доступ до файлової системи) — там збереження й
+        відкриття файлів іде через Storage Access Framework
+        (ACTION_CREATE_DOCUMENT / ACTION_OPEN_DOCUMENT, ProjectFileBridge.kt),
+        який НЕ потребує жодного дозволу взагалі. Це навмисно чесний
+        підхід, а не "про всяк випадок" WRITE_EXTERNAL_STORAGE, який на
+        сучасному Android однаково не працював би так, як очікується.
+    -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+
+    <application
+        android:name=".KovadloApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.Kovadlo"
+        android:supportsRtl="true"
+        android:requestLegacyExternalStorage="true"
+        tools:targetApi="34">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Kovadlo.Splash"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
