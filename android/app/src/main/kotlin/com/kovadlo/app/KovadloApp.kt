@@ -30,24 +30,58 @@ class KovadloApp : Application() {
             private set
     }
 
+    /** Записує [startupError] з міткою кроку й КОНКРЕТНОГО catch, що
+     * спрацював — щоб на екрані було видно, чи це взагалі той самий
+     * catch, і на якому саме кроці впало (діагностика, тимчасово). */
+    private fun fail(step: String, t: Throwable) {
+        Log.e(TAG, "$step впав", t)
+        startupError = "KT-CATCH $step:\n" + t.stackTraceToString()
+    }
+
     override fun onCreate() {
         super.onCreate()
 
-        if (!Python.isStarted()) {
-            Python.start(AndroidPlatform(this))
+        try {
+            if (!Python.isStarted()) {
+                Python.start(AndroidPlatform(this))
+            }
+        } catch (t: Throwable) {
+            fail("STEP1 (Python.start)", t)
+            return
+        }
+
+        val python: Python
+        try {
+            python = Python.getInstance()
+        } catch (t: Throwable) {
+            fail("STEP2 (Python.getInstance)", t)
+            return
+        }
+
+        // android_bootstrap.create_server_or_raise (android/pysrc/, НЕ
+        // web/server.py — той не чіпаємо) замість прямого виклику
+        // create_server: при збої кидає RuntimeError, чиє повідомлення —
+        // повний Python traceback (traceback.format_exc()), а не лише
+        // останній рядок винятку.
+        val bootstrapModule: PyObject
+        try {
+            bootstrapModule = python.getModule("android_bootstrap")
+        } catch (t: Throwable) {
+            fail("STEP3 (getModule android_bootstrap)", t)
+            return
+        }
+
+        // port=0 -> ОС сама обирає вільний локальний порт (як і в
+        // тестах на десктопі, create_server(port=0, ...)).
+        val server: PyObject
+        try {
+            server = bootstrapModule.callAttr("create_server_or_raise", 0)
+        } catch (t: Throwable) {
+            fail("STEP4 (callAttr create_server_or_raise)", t)
+            return
         }
 
         try {
-            val python = Python.getInstance()
-            // android_bootstrap.create_server_or_raise (android/pysrc/, НЕ
-            // web/server.py — той не чіпаємо) замість прямого виклику
-            // create_server: при збої кидає RuntimeError, чиє повідомлення —
-            // повний Python traceback (traceback.format_exc()), а не лише
-            // останній рядок винятку.
-            val bootstrapModule = python.getModule("android_bootstrap")
-            // port=0 -> ОС сама обирає вільний локальний порт (як і в
-            // тестах на десктопі, create_server(port=0, ...)).
-            val server: PyObject = bootstrapModule.callAttr("create_server_or_raise", 0)
             val port = server.get("server_address")!!.asList()[1].toInt()
             serverPort = port
 
@@ -65,13 +99,7 @@ class KovadloApp : Application() {
 
             Log.i(TAG, "Ковадло: локальний сервер запущено на 127.0.0.1:$port")
         } catch (t: Throwable) {
-            // Не рвемо застосунок одразу — MainActivity показує зрозуміле
-            // повідомлення, якщо serverPort так і лишився 0.
-            // Повний traceback (не лише t.message), щоб на екрані помилки
-            // було видно точний рядок збою, включно з Python-кадрами, які
-            // Chaquopy додає в стек винятку.
-            Log.e(TAG, "Не вдалося запустити вбудований Python-сервер", t)
-            startupError = t.stackTraceToString()
+            fail("STEP5 (server_address/thread)", t)
         }
     }
 }
