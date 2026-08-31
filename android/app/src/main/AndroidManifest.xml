@@ -18,6 +18,18 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <!--
+        Потрібен лише тому, що Android блокує сам системний виклик
+        socket() без цього дозволу — навіть для локальної петлі
+        127.0.0.1. Реального виходу в мережу застосунок не робить:
+        вбудований Python-сервер (KovadloApp.kt) слухає винятково
+        127.0.0.1 на випадковому вільному порту (web/server.py,
+        create_server(port=0, ...)), а WebView звертається лише до
+        нього ж. Без INTERNET спроба створити цей сокет падає з
+        PermissionError: [Errno 1] Operation not permitted.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="false" />

@@ -56,11 +56,17 @@ class MainActivity : AppCompatActivity() {
         val port = KovadloApp.serverPort
         if (port <= 0) {
             val error = KovadloApp.startupError ?: "невідома помилка запуску Python"
+            val escaped = error
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
             webView.loadDataWithBaseURL(
                 null,
                 "<html><body style='background:#2B2E33;color:#E8A33D;font-family:sans-serif;padding:24px'>" +
                     "<h2>Ковадло не змогло запуститися</h2>" +
-                    "<p>Помилка вбудованого Python-сервера:</p><pre>${error.replace("<", "&lt;")}</pre>" +
+                    "<p>Помилка вбудованого Python-сервера (повний traceback):</p>" +
+                    "<pre style='white-space:pre-wrap;word-break:break-word;color:#F2E9DD;" +
+                    "font-size:12px'>$escaped</pre>" +
                     "</body></html>",
                 "text/html",
                 "utf-8",

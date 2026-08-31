@@ -62,8 +62,11 @@ class KovadloApp : Application() {
         } catch (t: Throwable) {
             // Не рвемо застосунок одразу — MainActivity показує зрозуміле
             // повідомлення, якщо serverPort так і лишився 0.
+            // Повний traceback (не лише t.message), щоб на екрані помилки
+            // було видно точний рядок збою, включно з Python-кадрами, які
+            // Chaquopy додає в стек винятку.
             Log.e(TAG, "Не вдалося запустити вбудований Python-сервер", t)
-            startupError = t.message ?: t.toString()
+            startupError = t.stackTraceToString()
         }
     }
 }
