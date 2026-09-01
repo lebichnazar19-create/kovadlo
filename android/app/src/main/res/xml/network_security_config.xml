@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Дозволяє cleartext (http://, без TLS) лише для локальної петлі —
+    саме туди й тільки туди звертається WebView (вбудований Python-сервер
+    KovadloApp.kt / web/server.py слухає 127.0.0.1 на випадковому
+    вільному порту, див. коментар до дозволу INTERNET в AndroidManifest.xml).
+    Починаючи з targetSdk 28 система за замовчуванням блокує будь-який
+    cleartext-трафік (usesCleartextTraffic за замовчуванням false) — саме
+    тому WebView падав з net::ERR_CLEARTEXT_NOT_PERMITTED. На весь інтернет
+    (base-config) cleartext лишається заборонений — виняток тільки нижче.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">::1</domain>
+    </domain-config>
+</network-security-config>

@@ -42,6 +42,7 @@
         android:theme="@style/Theme.Kovadlo"
         android:supportsRtl="true"
         android:requestLegacyExternalStorage="true"
+        android:networkSecurityConfig="@xml/network_security_config"
         tools:targetApi="34">
 
         <activity
