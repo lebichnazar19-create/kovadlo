@@ -9,20 +9,17 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths:
-      - "android/**"
-      - "kovadlo/**"
-      - "web/**"
-      - ".github/workflows/android-build.yml"
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        # symlinks: true — важливо: android/pysrc/{kovadlo,web} це
-        # символічні посилання на пакети в корені репозиторію (щоб
-        # Chaquopy підключав ядро "як є", без копіювання).
+        # android/pysrc/{kovadlo,web} — символічні посилання на пакети в
+        # корені репозиторію (щоб Chaquopy підключав ядро "як є", без
+        # копіювання). Спеціальний прапорець тут не потрібен: на
+        # ubuntu-latest git за замовчуванням (core.symlinks=true)
+        # відновлює їх як справжні symlink'и.
         with:
           fetch-depth: 1
 
@@ -34,6 +31,15 @@ jobs:
 
       - name: Android SDK
         uses: android-actions/setup-android@v3
+
+      - name: Python 3.11 (для Chaquopy buildPython)
+        # Версія Python на машині збірки має збігатися мажор.мінор з
+        # версією в chaquopy.defaultConfig.version ("3.11" в app/build.gradle.kts).
+        # Після цього кроку інтерпретатор доступний в PATH як "python3.11" —
+        # саме такий фолбек-кандидат прописаний другим у buildPython(...).
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
       - name: Кеш Gradle
         uses: actions/cache@v4
