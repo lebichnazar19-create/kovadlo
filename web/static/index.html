@@ -4,6 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <title>Ковадло — візуалізація</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#2b2e33" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
 <style>
   :root {
     --bg: #16181c;
@@ -3227,6 +3231,16 @@ async function init() {
   redraw();
 }
 init();
+
+// PWA: реєстрація service worker (кешування оболонки для офлайн-
+// завантаження й встановлення на головний екран). Не критично для
+// роботи сторінки — якщо реєстрація не вдалась (напр. відкрито по
+// http:// не з localhost), просто мовчки пропускаємо.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
 </script>
 </body>
 </html>

@@ -1,0 +1,45 @@
+name: GitHub Pages (веб-версія Ковадла)
+
+# Публікує web/static/ (PWA-оболонка: index.html, manifest.json, sw.js,
+# іконки) як статичний сайт на GitHub Pages. Бекенд (web/server.py)
+# тут НЕ розгортається — GitHub Pages вміє віддавати лише статичні
+# файли, тож усі виклики /api/* на цьому сайті працювати не будуть.
+# Див. коментар у web/static/sw.js.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/static/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Підготувати Pages
+        uses: actions/configure-pages@v5
+
+      - name: Артефакт із web/static
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/static
+
+      - name: Деплой на GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
