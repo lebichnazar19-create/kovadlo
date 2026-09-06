@@ -11,7 +11,10 @@ import pytest
 from kovadlo.transmission import (
     BeltTransmission,
     DirectTransmission,
+    Gear,
     GearboxTransmission,
+    GearMesh,
+    GearTrain,
     Transmission,
     power_w,
     rad_s_to_rpm,
@@ -104,3 +107,90 @@ def test_belt_transmission_speed_up_when_ratio_below_one():
     belt = BeltTransmission.from_pulley_diameters(driving_diameter_mm=150, driven_diameter_mm=50, efficiency=1.0)
     assert belt.ratio() == pytest.approx(1.0 / 3.0)
     assert belt.output_rpm(1000) == pytest.approx(3000.0)
+
+
+# ------------------------------------------------------------------ Gear
+
+def test_gear_pitch_and_outer_diameter_hand_verified():
+    # m=2, z=20: d = m*z = 40 мм; da = d + 2*m = 44 мм.
+    gear = Gear(module_mm=2.0, teeth=20, width_mm=15.0)
+    assert gear.pitch_diameter_mm == pytest.approx(40.0)
+    assert gear.outer_diameter_mm == pytest.approx(44.0)
+
+
+def test_gear_rejects_non_positive_module():
+    with pytest.raises(ValueError):
+        Gear(module_mm=0, teeth=20, width_mm=10)
+    with pytest.raises(ValueError):
+        Gear(module_mm=-1, teeth=20, width_mm=10)
+
+
+def test_gear_rejects_too_few_teeth():
+    with pytest.raises(ValueError):
+        Gear(module_mm=2, teeth=7, width_mm=10)
+    Gear(module_mm=2, teeth=8, width_mm=10)  # межа — ще ок
+
+
+def test_gear_rejects_non_positive_width():
+    with pytest.raises(ValueError):
+        Gear(module_mm=2, teeth=20, width_mm=0)
+
+
+# -------------------------------------------------------------- GearMesh
+
+def test_gear_mesh_center_distance_hand_verified():
+    # d_a=40, d_b=80 -> міжосьова = (40+80)/2 = 60 мм.
+    mesh = GearMesh(Gear(module_mm=2, teeth=20, width_mm=10), Gear(module_mm=2, teeth=40, width_mm=10))
+    assert mesh.center_distance_mm == pytest.approx(60.0)
+
+
+def test_gear_mesh_ratio_hand_verified():
+    mesh = GearMesh(Gear(module_mm=2, teeth=20, width_mm=10), Gear(module_mm=2, teeth=40, width_mm=10))
+    assert mesh.ratio == pytest.approx(2.0)  # z_b/z_a = 40/20
+
+
+def test_gear_mesh_output_rpm_reverses_direction():
+    mesh = GearMesh(Gear(module_mm=2, teeth=20, width_mm=10), Gear(module_mm=2, teeth=40, width_mm=10))
+    assert mesh.output_rpm(1000.0) == pytest.approx(-500.0)  # -1000/2
+
+
+def test_gear_mesh_speeds_up_when_driven_gear_smaller():
+    mesh = GearMesh(Gear(module_mm=2, teeth=40, width_mm=10), Gear(module_mm=2, teeth=20, width_mm=10))
+    assert mesh.ratio == pytest.approx(0.5)
+    assert mesh.output_rpm(1000.0) == pytest.approx(-2000.0)
+
+
+def test_gear_mesh_rejects_mismatched_module():
+    with pytest.raises(ValueError):
+        GearMesh(Gear(module_mm=2, teeth=20, width_mm=10), Gear(module_mm=3, teeth=20, width_mm=10))
+
+
+# -------------------------------------------------------------- GearTrain
+
+def test_gear_train_rejects_empty():
+    with pytest.raises(ValueError):
+        GearTrain([])
+
+
+def test_gear_train_total_ratio_multiplies_stage_ratios():
+    stage = GearMesh(Gear(module_mm=2, teeth=20, width_mm=10), Gear(module_mm=2, teeth=40, width_mm=10))  # ratio=2
+    train = GearTrain([stage, stage])
+    assert train.total_ratio == pytest.approx(4.0)
+
+
+def test_gear_train_output_rpm_cancels_sign_after_even_number_of_meshes():
+    # Два зовнішні зачеплення поспіль — два реверси скасовують один одного,
+    # напрям на виході збігається з вхідним; величина — 1000/4 = 250.
+    stage = GearMesh(Gear(module_mm=2, teeth=20, width_mm=10), Gear(module_mm=2, teeth=40, width_mm=10))
+    train = GearTrain([stage, stage])
+    assert train.output_rpm(1000.0) == pytest.approx(250.0)
+
+
+def test_gear_train_output_rpm_matches_sequential_mesh_application():
+    stage_a = GearMesh(Gear(module_mm=2, teeth=20, width_mm=10), Gear(module_mm=2, teeth=30, width_mm=10))
+    stage_b = GearMesh(Gear(module_mm=1.5, teeth=15, width_mm=10), Gear(module_mm=1.5, teeth=45, width_mm=10))
+    train = GearTrain([stage_a, stage_b])
+
+    expected = stage_b.output_rpm(stage_a.output_rpm(1200.0))
+    assert train.output_rpm(1200.0) == pytest.approx(expected)
+    assert train.total_ratio == pytest.approx(stage_a.ratio * stage_b.ratio)

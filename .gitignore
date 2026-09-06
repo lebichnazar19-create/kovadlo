@@ -1,0 +1,8 @@
+# JS-пісочниці (package.json у корені) — node_modules сюди точно не йде,
+# 82+ МБ лише replicad-opencascadejs (WASM-збірка OpenCascade).
+node_modules/
+dist/
+
+# Python build-артефакти.
+__pycache__/
+*.egg-info/

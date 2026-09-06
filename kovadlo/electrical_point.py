@@ -17,6 +17,12 @@ class PointKind(Enum):
     STOVE = "плита"
     BOILER = "бойлер"
     PANEL = "щиток"
+    WASHER = "пральна машина"
+    DISHWASHER = "посудомийка"
+    MICROWAVE = "мікрохвильовка"
+    FRIDGE = "холодильник"
+    OVEN = "духовка"
+    AC = "кондиціонер"
 
 
 # Типова потужність за замовчуванням, Вт — орієнтовні значення для
@@ -28,7 +34,13 @@ DEFAULT_POWER_W: dict[PointKind, float] = {
     PointKind.LIGHT: 60.0,  # типовий світильник
     PointKind.STOVE: 7000.0,  # побутова електроплита/варильна поверхня
     PointKind.BOILER: 2000.0,  # побутовий водонагрівач
-    PointKind.PANEL: 0.0,  # щиток — вузол розподілу, а не споживач
+    PointKind.PANEL: 0.0,
+    PointKind.WASHER: 2200.0,
+    PointKind.DISHWASHER: 2000.0,
+    PointKind.MICROWAVE: 1200.0,
+    PointKind.FRIDGE: 300.0,
+    PointKind.OVEN: 3500.0,
+    PointKind.AC: 1500.0,  # щиток — вузол розподілу, а не споживач
 }
 
 
