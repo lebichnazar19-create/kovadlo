@@ -11,6 +11,13 @@ readme = "README.md"
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
+# web/ifc_export.py (НЕ kovadlo/ — ядро лишається stdlib-only, див.
+# CLAUDE.md). IfcOpenShell — LGPL, звичайний import, без лінковки.
+# Колесо є лише під glibc Linux (manylinux) — якщо працюєте з-під
+# Termux/Android напряму, ставте в окремий venv поверх proot-distro
+# Ubuntu (Android-python не підходить, тегу платформи android_* для
+# ifcopenshell нема): `python3 -m venv .venv && .venv/bin/pip install -e ".[ifc]"`.
+ifc = ["ifcopenshell"]
 
 [tool.setuptools.packages.find]
 include = ["kovadlo*"]

@@ -6,3 +6,6 @@ dist/
 # Python build-артефакти.
 __pycache__/
 *.egg-info/
+
+# Venv для pip-залежностей поза ядром kovadlo/ (напр. ifcopenshell для експорту IFC).
+.venv/

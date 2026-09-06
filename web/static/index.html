@@ -192,6 +192,7 @@ body.aside-hidden aside { display: none; }
     <div class="project-controls">
       <button class="secondary" onclick="saveProjectToFile()">Зберегти проєкт</button>
       <button class="secondary" onclick="openProjectFromFile()">Відкрити проєкт</button>
+      <button class="secondary" onclick="exportProjectIfc()">Експорт IFC</button>
       <input type="file" id="project-file-input" accept="application/json" style="display:none">
     </div>
     <div class="tabs" id="building-tabs">
@@ -4195,6 +4196,36 @@ async function saveProjectToFile() {
     }
   } catch (e) {
     alert("Не вдалося зберегти проєкт: " + e.message);
+  }
+}
+
+async function exportProjectIfc() {
+  // /api/project/export_ifc віддає бінарний .ifc (не JSON) — тому напряму
+  // fetch(), не apiGet(); помилка (404 без кімнати, 501 без ifcopenshell
+  // на сервері — web/ifc_export.py) все одно приходить як JSON {error}.
+  try {
+    const res = await fetch("/api/project/export_ifc");
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `Помилка запиту (${res.status})`);
+    }
+    const blob = await res.blob();
+    if (window.KovadloNative && window.KovadloNative.saveProject) {
+      // Android: той самий місток, що й для JSON-проєкту (SAF), — приймає рядок,
+      // тож .ifc (текстовий STEP-формат) віддаємо як є.
+      window.KovadloNative.saveProject(await blob.text(), "kovadlo-project.ifc");
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "kovadlo-project.ifc";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+  } catch (e) {
+    alert("Не вдалося експортувати IFC: " + e.message);
   }
 }
 
