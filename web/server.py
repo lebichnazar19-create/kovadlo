@@ -18,6 +18,7 @@ import json
 import math
 import mimetypes
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -62,7 +63,9 @@ from kovadlo import (
     air_velocity_m_s,
     auto_place_detectors,
     build_default_database,
+    build_gable_roof,
     build_route,
+    build_shed_roof,
     calculate_tiling,
     condensation_risk_warnings,
     format_report,
@@ -488,6 +491,8 @@ def build_handler_class(state: AppState) -> type[BaseHTTPRequestHandler]:
                 self._handle_mechanism_scene()
             elif self.path == "/api/project/export":
                 self._handle_project_export()
+            elif self.path == "/api/project/export_ifc":
+                self._handle_project_export_ifc()
             else:
                 self._send_error_json(404, "Не знайдено")
 
@@ -1396,6 +1401,77 @@ def build_handler_class(state: AppState) -> type[BaseHTTPRequestHandler]:
             """Повний стан сервера як JSON — те, що клієнт зберігає у файл
             (`web/project_io.py`)."""
             self._send_json(200, export_project(state))
+
+        def _handle_project_export_ifc(self) -> None:
+            """Експорт поточної кімнати в IFC4 (`web/ifc_export.py`) —
+            окрема необов'язкова залежність (ifcopenshell, LGPL), НЕ в
+            kovadlo/ (ядро лишається stdlib-only). Якщо не встановлено —
+            зрозуміла помилка, а не падіння сервера (модуль лениво
+            імпортується лише тут, а не при старті web.server)."""
+            try:
+                from .ifc_export import RoomExport
+                from .ifc_export import export_project as export_ifc_project
+            except ImportError:
+                self._send_error_json(
+                    501,
+                    "Експорт IFC недоступний: не встановлено ifcopenshell "
+                    "(pip install -e \".[ifc]\" — див. pyproject.toml)",
+                )
+                return
+
+            if state.room is None:
+                self._send_error_json(400, "Спочатку намалюйте кімнату")
+                return
+
+            openings_by_wall: dict[int, list[Opening]] = {}
+            for o in state.openings3d.values():
+                openings_by_wall.setdefault(o.wall_index, []).append(
+                    Opening(
+                        kind=OpeningKind[o.kind],
+                        offset_mm=o.offset_mm,
+                        sill_height_mm=o.sill_height_mm,
+                        width_mm=o.width_mm,
+                        height_mm=o.height_mm,
+                        name=o.name,
+                    )
+                )
+
+            roof_faces = None
+            if state.roof.roof_type != "NONE":
+                try:
+                    base_height_mm = state.room.walls[0].height if state.room.walls else 2700.0
+                    if state.roof.roof_type == "SHED":
+                        roof = build_shed_roof(
+                            state.room.contour, base_height_mm, state.roof.slope_deg, low_side=state.roof.low_side
+                        )
+                    else:
+                        roof = build_gable_roof(
+                            state.room.contour, base_height_mm, state.roof.slope_deg, ridge_along=state.roof.ridge_along
+                        )
+                    roof_faces = roof.faces
+                except ValueError:
+                    # непрямокутний контур чи некоректний кут — той самий випадок,
+                    # що вкладка «3D» просто не рендерить дах (scene3d.py).
+                    roof_faces = None
+
+            room_export = RoomExport(
+                room=state.room,
+                floor_thickness_mm=200.0,  # той самий "поки не налаштовується" placeholder, що scene3d.py
+                openings_by_wall=openings_by_wall,
+                roof_faces=roof_faces,
+            )
+
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                tmp_path = Path(tmp_dir) / "project.ifc"
+                export_ifc_project([room_export], str(tmp_path), project_name="Ковадло")
+                body = tmp_path.read_bytes()
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-step")
+            self.send_header("Content-Disposition", 'attachment; filename="kovadlo-project.ifc"')
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
         def _handle_project_import(self) -> None:
             """Відновлює стан сервера з JSON файлу проєкту."""
