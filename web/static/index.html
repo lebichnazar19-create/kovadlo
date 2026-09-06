@@ -34,6 +34,12 @@
   }
   header h1 { font-size: 14px; margin: 0; font-weight: 600; white-space: nowrap; }
   .project-controls { display: flex; gap: 4px; }
+  .mode-switch { display: flex; gap: 4px; }
+  .mode-btn {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  .mode-btn.active { background: var(--cut-accent); color: #1a1300; border-color: var(--cut-accent); }
   .tabs { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
   .tab-btn {
     background: none; border: 1px solid var(--border); color: var(--muted);
@@ -42,9 +48,15 @@
   .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
   main { flex: 1; display: flex; min-height: 0; }
-  #canvas-wrap {
+  #canvas-wrap { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  #view-toolbar {
+    flex: 0 0 auto; display: none; gap: 6px; padding: 6px 10px;
+    background: var(--panel-bg); border-bottom: 1px solid var(--border);
+  }
+  #view-toolbar button { font-size: 12px; padding: 6px 10px; }
+  #canvas-area {
     flex: 1; position: relative; overflow: hidden;
-    touch-action: none; background: #101216;
+    touch-action: none; background: #101216; min-height: 0;
   }
   canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   #hint {
@@ -57,11 +69,6 @@
     background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 5px;
     font-size: 11px; color: var(--muted);
   }
-  #view-buttons {
-    position: absolute; right: 10px; top: 10px;
-    display: flex; flex-direction: column; gap: 4px;
-  }
-  #view-buttons button { font-size: 11px; padding: 5px 8px; }
 
   aside {
     width: 330px; flex-shrink: 0; background: var(--panel-bg);
@@ -140,18 +147,54 @@
     background: rgba(255,180,84,0.12); border: 1px solid #ffb454;
     border-radius: 6px; padding: 8px 10px; font-size: 12px;
   }
+
+@media (max-width: 760px) {
+  header { flex-wrap: wrap; gap: 6px; padding: 8px 10px; }
+  header h1 { font-size: 16px; width: 100%; }
+  .project-controls { order: 3; width: 100%; }
+  .project-controls button { flex: 1; }
+  .tabs { margin-left: 0; width: 100%; justify-content: flex-start;
+          flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab-btn { white-space: nowrap; flex: 0 0 auto; font-size: 14px; padding: 8px 14px; }
+
+  main { flex-direction: column; }
+  #canvas-wrap { flex: none; height: 48vh; width: 100%; }
+  aside { width: 100%; flex-shrink: 1; border-left: 0;
+          border-top: 1px solid var(--border); max-height: none; }
+
+  #hint { left: 8px; right: 8px; top: 8px; max-width: none; font-size: 13px; }
+  #view-toolbar { flex-wrap: wrap; padding: 6px 8px; }
+  #view-toolbar button { font-size: 12px; padding: 7px 10px; }
+  #zoom-hint { display: none; }
+}
+
+#panel-toggle {
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  z-index: 50; width: 26px; height: 64px;
+  background: var(--panel-bg); border: 1px solid var(--border); border-right: 0;
+  border-radius: 8px 0 0 8px; color: var(--muted);
+  font-size: 15px; cursor: pointer; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+body.aside-hidden aside { display: none; }
 </style>
 </head>
 <body>
 <div id="app">
   <header>
     <h1>Ковадло</h1>
+    <div class="mode-switch">
+      <button class="mode-btn active" data-mode="building">Будівництво</button>
+      <button class="mode-btn" data-mode="mechanism">Механізми</button>
+      <button class="mode-btn" data-mode="parts">Деталі</button>
+    </div>
     <div class="project-controls">
       <button class="secondary" onclick="saveProjectToFile()">Зберегти проєкт</button>
       <button class="secondary" onclick="openProjectFromFile()">Відкрити проєкт</button>
       <input type="file" id="project-file-input" accept="application/json" style="display:none">
     </div>
-    <div class="tabs">
+    <div class="tabs" id="building-tabs">
       <button class="tab-btn active" data-tab="top">Вид зверху</button>
       <button class="tab-btn" data-tab="wall">Розгортка / плитка</button>
       <button class="tab-btn" data-tab="electrical">Електрика</button>
@@ -161,17 +204,25 @@
       <button class="tab-btn" data-tab="fire">Пожежна безпека</button>
       <button class="tab-btn" data-tab="3d">3D</button>
     </div>
+    <div class="tabs" id="mechanism-tabs" style="display:none">
+      <button class="tab-btn active" data-mech-tab="3d">3D</button>
+      <button class="tab-btn" data-mech-tab="time">Час</button>
+    </div>
   </header>
   <main>
     <div id="canvas-wrap">
-      <canvas id="canvas"></canvas>
-      <canvas id="canvas3d" style="display:none"></canvas>
-      <div id="hint"></div>
-      <div id="zoom-hint">Перетягніть — панорама, щипок/колесо — масштаб</div>
-      <div id="view-buttons" style="display:none">
+      <div id="view-toolbar">
         <button class="secondary" data-view="top">Зверху</button>
         <button class="secondary" data-view="front">Спереду</button>
         <button class="secondary" data-view="iso">Ізометрія</button>
+      </div>
+      <div id="canvas-area">
+        <canvas id="canvas"></canvas>
+        <canvas id="canvas3d" style="display:none"></canvas>
+        <canvas id="canvas-mechanism" style="display:none"></canvas>
+        <canvas id="canvas-parts" style="display:none"></canvas>
+        <div id="hint"></div>
+        <div id="zoom-hint">Перетягніть — панорама, щипок/колесо — масштаб</div>
       </div>
     </div>
     <aside id="panel"></aside>
@@ -190,7 +241,7 @@
 
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
-const wrap = document.getElementById("canvas-wrap");
+const wrap = document.getElementById("canvas-area"); // площа малювання САМЕ під смугою кнопок видів
 const hintEl = document.getElementById("hint");
 const panelEl = document.getElementById("panel");
 
@@ -249,6 +300,12 @@ const POINT_KINDS = [
   { kind: "STOVE", label: "Плита", glyph: "П" },
   { kind: "BOILER", label: "Бойлер", glyph: "Б" },
   { kind: "PANEL", label: "Щиток", glyph: "Щ" },
+    { kind: "WASHER", label: "Пральна машина", glyph: "Пр" },
+    { kind: "DISHWASHER", label: "Посудомийка", glyph: "Пс" },
+    { kind: "MICROWAVE", label: "Мікрохвильовка", glyph: "Мх" },
+    { kind: "FRIDGE", label: "Холодильник", glyph: "Хл" },
+    { kind: "OVEN", label: "Духовка", glyph: "Дх" },
+    { kind: "AC", label: "Кондиціонер", glyph: "Кд" },
 ];
 const ELECTRICAL_PALETTE = ["#4f8cff", "#ff9d3d", "#5ad17a", "#e05fd0", "#f4d35e", "#7ad6e0", "#c76b6b", "#9b7edb"];
 
@@ -303,13 +360,62 @@ const state = {
     selectedWallIndex: null,   // для розстановки отворів
     roofType: "NONE",
     roofSlope: 30,
+    motionT: 0,             // поточний момент часу розльоту шарів обраної стіни, с
+    motionPlaying: false,
   },
 };
+
+// ---- режим "Механізми": повністю окремий від "Будівництва" (state вище) —
+// власна сцена, власний час, ніякого зв'язку з кімнатою/стінами. ----
+let appMode = "building"; // "building" | "mechanism" | "parts"
+const mechanismState = {
+  tab: "3d",        // "3d" | "time"
+  data: null,       // останній /api/mechanism/scene
+  motionT: 0,
+  motionPlaying: false,
+};
+
+// ---- режим "Деталі": ще одна незалежна сцена — параметричні деталі
+// (зараз лише підшипник, kovadlo/motion.py тут ні до чого) через OCCT
+// (replicad) у Web Worker (web/static/js/parts/). Бандл+WASM
+// (web/static/dist/parts/, npm run build) вантажаться ЛИШЕ при першому
+// відкритті цієї вкладки — динамічним import(), а не в головному
+// <script> сторінки. ----
+const partsState = {
+  code: "7204",     // обраний розмір з каталогу (kovadlo/... немає — свій, bearing.js)
+  status: "",       // текст статусу для панелі (крутиться/готово/помилка)
+};
+let partsController = null; // {load, catalog} з parts-viewer.js, після першого відкриття вкладки
+
+// --- розліт шарів стіни (режим "Будівництво", modules/motion): параметри
+// повзунка й пачкового відтворення. Кадри тягнуться ОДНИМ POST-запитом
+// при натисканні "Відтворити" і далі програються локально (без запиту
+// на кожен кадр) — повзунок вручну й далі шле по одному кадру за раз.
+const MOTION_MAX_T = 10;         // тривалість циклу повзунка/відтворення, с
+const MOTION_PLAYBACK_FPS = 30;  // частота кадрів у пачці, що тягнеться на "Відтворити"
+let motionFrames = null;         // кеш пачки кадрів для поточного відтворення
+let motionRAF = null;
+let motionPlayStartMs = null;
+let motionPlayStartT = 0;
+let motionScrubInFlight = false;   // не більше одного запиту "поодинокого кадру" воднораз
+let motionScrubPendingT = null;    // останнє значення повзунка, яке ще не надіслано
+
+// --- те саме, але для демо-стенду руху режиму "Механізми" — повністю
+// незалежний набір змінних, щоб відтворення в одному режимі не займало
+// повзунок/кеш іншого.
+let mechanismMotionFrames = null;
+let mechanismRAF = null;
+let mechanismPlayStartMs = null;
+let mechanismPlayStartT = 0;
+let mechanismScrubInFlight = false;
+let mechanismScrubPendingT = null;
 
 // Живі об'єкти three.js (сцена/камера/рендерер/меші) — НЕ частина
 // серіалізованого стану вище, живуть окремо й створюються один раз
 // при першому вході на вкладку "3D".
 let scene3d = null;
+let mechanismScene3d = null; // окрема сцена режиму "Механізми" — свій canvas, свій рендерер
+let partsScene3d = null;     // окрема сцена режиму "Деталі" — свій canvas, свій рендерер
 
 function activeView() { return state.tab === "wall" ? state.viewWall : state.viewTop; }
 
@@ -620,7 +726,7 @@ function routeDrawingLengthM() {
   return total / 1000;
 }
 
-async function assignGroup(pointName, groupName, phase, minCrossSection) {
+async function assignGroup(pointName, groupName, phase, minCrossSection, powerW) {
   if (!groupName) { alert("Вкажіть назву групи."); return; }
   try {
     await apiPost("/api/electrical/assign_group", {
@@ -628,6 +734,7 @@ async function assignGroup(pointName, groupName, phase, minCrossSection) {
       group_name: groupName,
       phase,
       min_cross_section_mm2: Number(minCrossSection) || 1.5,
+      power_w: Number(powerW) > 0 ? Number(powerW) : undefined,
     });
     await refreshElectricalState();
     await refreshElectricalReport();
@@ -1050,6 +1157,8 @@ const ROUTE_COLOR = 0x4f8cff;
 const FIXTURE_COLOR = 0xffe08a;
 
 const canvas3dEl = document.getElementById("canvas3d");
+const canvasMechanismEl = document.getElementById("canvas-mechanism");
+const canvasPartsEl = document.getElementById("canvas-parts");
 
 function ensureThreeScene() {
   if (scene3d) return;
@@ -1072,15 +1181,54 @@ function ensureThreeScene() {
   const ductsGroup = new THREE.Group();
   const routesGroup = new THREE.Group();
   const fixturesGroup = new THREE.Group();
-  scene.add(wallsGroup, floorGroup, roofGroup, ductsGroup, routesGroup, fixturesGroup);
+  const wallExplosionGroup = new THREE.Group();
+  scene.add(wallsGroup, floorGroup, roofGroup, ductsGroup, routesGroup, fixturesGroup, wallExplosionGroup);
 
   scene3d = {
     renderer, scene, camera,
-    wallsGroup, floorGroup, roofGroup, ductsGroup, routesGroup, fixturesGroup,
+    wallsGroup, floorGroup, roofGroup, ductsGroup, routesGroup, fixturesGroup, wallExplosionGroup,
     orbit: { target: { x: 2, y: 1, z: 1.5 }, azimuth: Math.PI / 4, polar: Math.PI / 3.2, radius: 8 },
   };
   updateCameraFromOrbit();
   resizeScene3D();
+}
+
+// Сцена режиму "Механізми" — набагато простіша за Будівництво: жодних
+// стін/підлоги/даху, лише сам стенд руху (motionGroup).
+function ensureMechanismScene() {
+  if (mechanismScene3d) return;
+  const renderer = new THREE.WebGLRenderer({ canvas: canvasMechanismEl, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x14161a);
+
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 200);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.75);
+  sun.position.set(5, 10, 7);
+  scene.add(sun);
+
+  const motionGroup = new THREE.Group();
+  scene.add(motionGroup);
+
+  mechanismScene3d = {
+    renderer, scene, camera, motionGroup,
+    orbit: { target: { x: 0, y: 0.2, z: 0 }, azimuth: Math.PI / 4, polar: Math.PI / 3.2, radius: 0.6 },
+  };
+  updateMechanismCameraFromOrbit();
+  resizeMechanismScene();
+}
+
+function updateMechanismCameraFromOrbit() {
+  if (!mechanismScene3d) return;
+  updateOrbitCamera(mechanismScene3d);
+}
+
+function renderMechanismScene() {
+  if (!mechanismScene3d) return;
+  mechanismScene3d.renderer.render(mechanismScene3d.scene, mechanismScene3d.camera);
 }
 
 function resizeScene3D() {
@@ -1093,30 +1241,116 @@ function resizeScene3D() {
 }
 window.addEventListener("resize", resizeScene3D);
 
-function updateCameraFromOrbit() {
-  if (!scene3d) return;
-  const o = scene3d.orbit;
+function resizeMechanismScene() {
+  if (!mechanismScene3d) return;
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  mechanismScene3d.renderer.setSize(w, h, false);
+  mechanismScene3d.camera.aspect = w / Math.max(1, h);
+  mechanismScene3d.camera.updateProjectionMatrix();
+  renderMechanismScene();
+}
+window.addEventListener("resize", resizeMechanismScene);
+
+// Сцена режиму "Деталі" — ще простіша за "Механізми": жодних заздалегідь
+// підготованих груп, parts-viewer.js сам додає/прибирає THREE-групу
+// поточної деталі напряму в `scene`. Одиниці — ті самі "мм", що й у
+// bearing.js (replicad не знає про одиниці, це просто числа).
+function ensurePartsScene() {
+  if (partsScene3d) return;
+  const renderer = new THREE.WebGLRenderer({ canvas: canvasPartsEl, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x14161a);
+
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 2000);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+  sun.position.set(100, 150, 100);
+  scene.add(sun);
+
+  partsScene3d = {
+    renderer, scene, camera,
+    orbit: { target: { x: 0, y: 0, z: 0 }, azimuth: Math.PI / 4, polar: Math.PI / 3.2, radius: 120 },
+  };
+  updatePartsCameraFromOrbit();
+  resizePartsScene();
+}
+
+function updatePartsCameraFromOrbit() {
+  if (!partsScene3d) return;
+  updateOrbitCamera(partsScene3d);
+}
+
+function renderPartsScene() {
+  if (!partsScene3d) return;
+  partsScene3d.renderer.render(partsScene3d.scene, partsScene3d.camera);
+}
+
+function resizePartsScene() {
+  if (!partsScene3d) return;
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  partsScene3d.renderer.setSize(w, h, false);
+  partsScene3d.camera.aspect = w / Math.max(1, h);
+  partsScene3d.camera.updateProjectionMatrix();
+  renderPartsScene();
+}
+window.addEventListener("resize", resizePartsScene);
+
+// Спільна орбітальна камера — використовується і Будівництвом (scene3d),
+// і Механізмами (mechanismScene3d): два незалежні об'єкти тієї самої форми.
+function updateOrbitCamera(scene3dLike) {
+  const o = scene3dLike.orbit;
   o.polar = clamp(o.polar, 0.05, Math.PI - 0.05);
   const x = o.target.x + o.radius * Math.sin(o.polar) * Math.sin(o.azimuth);
   const y = o.target.y + o.radius * Math.cos(o.polar);
   const z = o.target.z + o.radius * Math.sin(o.polar) * Math.cos(o.azimuth);
-  scene3d.camera.position.set(x, y, z);
-  scene3d.camera.lookAt(o.target.x, o.target.y, o.target.z);
+  scene3dLike.camera.position.set(x, y, z);
+  scene3dLike.camera.lookAt(o.target.x, o.target.y, o.target.z);
+}
+
+// Підганяє ціль/радіус орбіти під bounding box деталей стенду руху, у
+// метрах — спільне для початкового кадрування сцени "Механізми".
+function fitOrbitToRig(orbit, rigParts) {
+  if (!rigParts || !rigParts.length) return;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  rigParts.forEach((part) => {
+    const halfSizeM = (part.kind === "gear" ? part.radius_mm : part.size_mm / 2) / 1000;
+    const [x, y, z] = threePosition(part.position_mm);
+    minX = Math.min(minX, x - halfSizeM); maxX = Math.max(maxX, x + halfSizeM);
+    minY = Math.min(minY, y - halfSizeM); maxY = Math.max(maxY, y + halfSizeM);
+    minZ = Math.min(minZ, z - halfSizeM); maxZ = Math.max(maxZ, z + halfSizeM);
+  });
+  orbit.target = { x: (minX + maxX) / 2, y: (minY + maxY) / 2, z: (minZ + maxZ) / 2 };
+  const span = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+  orbit.radius = Math.max(0.6, span * 1.8);
+  orbit.polar = Math.PI / 3.2;
+  orbit.azimuth = Math.PI / 4;
+}
+
+function updateCameraFromOrbit() {
+  if (!scene3d) return;
+  updateOrbitCamera(scene3d);
 }
 
 function render3d() {
   if (!scene3d) return;
+  updateWallExplosionLabelScales();
   scene3d.renderer.render(scene3d.scene, scene3d.camera);
 }
 
+// Смуга кнопок видів над полотном — спільна для 3D Будівництва й
+// Механізмів; діє на ту сцену, що зараз активна (appMode).
 function setQuickView3D(view) {
-  if (!scene3d) return;
-  const o = scene3d.orbit;
+  const active = activeScene3D();
+  if (!active) return;
+  const o = active.orbit;
   if (view === "top") { o.polar = 0.15; o.azimuth = 0; }
   else if (view === "front") { o.polar = Math.PI / 2.1; o.azimuth = 0; }
   else if (view === "iso") { o.polar = Math.PI / 3.2; o.azimuth = Math.PI / 4; }
-  updateCameraFromOrbit();
-  render3d();
+  activeUpdateCamera3D();
+  activeRender3D();
 }
 
 function toggleRoofVisible() {
@@ -1133,90 +1367,126 @@ function toggleWallsVisible() {
   renderScene3DPanel();
 }
 
-/* ---- жести: один палець обертає камеру, два — масштаб і панорама ---- */
+/* ---- жести: один палець обертає камеру, два — масштаб і панорама ----
+ * Спільні для всіх трьох 3D-сцен (Будівництво/Механізми/Деталі) — діють
+ * на ту, що зараз активна за appMode; сама подія прийде лише з видимого
+ * canvas, тож стан жесту (pointers3d/drag3dStart/pinch3dStart) можна
+ * ділити. */
+
+function activeScene3D() {
+  if (appMode === "mechanism") return mechanismScene3d;
+  if (appMode === "parts") return partsScene3d;
+  return scene3d;
+}
+function activeUpdateCamera3D() {
+  if (appMode === "mechanism") updateMechanismCameraFromOrbit();
+  else if (appMode === "parts") updatePartsCameraFromOrbit();
+  else updateCameraFromOrbit();
+}
+function activeRender3D() {
+  if (appMode === "mechanism") renderMechanismScene();
+  else if (appMode === "parts") renderPartsScene();
+  else render3d();
+}
 
 const pointers3d = new Map();
 let drag3dStart = null;
 let pinch3dStart = null;
 
-canvas3dEl.addEventListener("pointerdown", (e) => {
-  canvas3dEl.setPointerCapture(e.pointerId);
+function onPointerDown3D(e) {
+  e.currentTarget.setPointerCapture(e.pointerId);
   pointers3d.set(e.pointerId, { x: e.clientX, y: e.clientY });
-  if (!scene3d) return;
+  const active = activeScene3D();
+  if (!active) return;
   if (pointers3d.size === 1) {
     const p = [...pointers3d.values()][0];
-    drag3dStart = { x: p.x, y: p.y, azimuth: scene3d.orbit.azimuth, polar: scene3d.orbit.polar };
+    drag3dStart = { x: p.x, y: p.y, azimuth: active.orbit.azimuth, polar: active.orbit.polar };
   } else if (pointers3d.size === 2) {
     const [a, b] = [...pointers3d.values()];
     pinch3dStart = {
       dist: Math.hypot(a.x - b.x, a.y - b.y),
       mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
-      radius: scene3d.orbit.radius,
-      target: { ...scene3d.orbit.target },
+      radius: active.orbit.radius,
+      target: { ...active.orbit.target },
     };
     drag3dStart = null;
   }
-});
+}
 
-canvas3dEl.addEventListener("pointermove", (e) => {
-  if (!pointers3d.has(e.pointerId) || !scene3d) return;
+function onPointerMove3D(e) {
+  const active = activeScene3D();
+  if (!pointers3d.has(e.pointerId) || !active) return;
   pointers3d.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
   if (pointers3d.size === 1 && drag3dStart) {
     const p = [...pointers3d.values()][0];
     const dx = p.x - drag3dStart.x, dy = p.y - drag3dStart.y;
-    scene3d.orbit.azimuth = drag3dStart.azimuth - dx * 0.01;
-    scene3d.orbit.polar = clamp(drag3dStart.polar - dy * 0.01, 0.05, Math.PI - 0.05);
-    updateCameraFromOrbit();
-    render3d();
+    active.orbit.azimuth = drag3dStart.azimuth - dx * 0.01;
+    active.orbit.polar = clamp(drag3dStart.polar - dy * 0.01, 0.05, Math.PI - 0.05);
+    activeUpdateCamera3D();
+    activeRender3D();
   } else if (pointers3d.size === 2 && pinch3dStart) {
     const [a, b] = [...pointers3d.values()];
     const dist = Math.hypot(a.x - b.x, a.y - b.y);
     const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 
     const scale = pinch3dStart.dist / Math.max(1, dist);
-    scene3d.orbit.radius = clamp(pinch3dStart.radius * scale, 0.5, 60);
+    active.orbit.radius = clamp(pinch3dStart.radius * scale, 0.5, 60);
 
     const dxPix = mid.x - pinch3dStart.mid.x, dyPix = mid.y - pinch3dStart.mid.y;
-    const panScale = scene3d.orbit.radius * 0.0018;
-    const az = scene3d.orbit.azimuth;
+    const panScale = active.orbit.radius * 0.0018;
+    const az = active.orbit.azimuth;
     const rightX = Math.cos(az), rightZ = -Math.sin(az);
-    scene3d.orbit.target.x = pinch3dStart.target.x - dxPix * panScale * rightX;
-    scene3d.orbit.target.z = pinch3dStart.target.z - dxPix * panScale * rightZ;
-    scene3d.orbit.target.y = pinch3dStart.target.y + dyPix * panScale;
+    active.orbit.target.x = pinch3dStart.target.x - dxPix * panScale * rightX;
+    active.orbit.target.z = pinch3dStart.target.z - dxPix * panScale * rightZ;
+    active.orbit.target.y = pinch3dStart.target.y + dyPix * panScale;
 
-    updateCameraFromOrbit();
-    render3d();
+    activeUpdateCamera3D();
+    activeRender3D();
   }
-});
+}
 
 function endPointer3d(e) {
   pointers3d.delete(e.pointerId);
   if (pointers3d.size < 1) drag3dStart = null;
   if (pointers3d.size < 2) pinch3dStart = null;
 }
-canvas3dEl.addEventListener("pointerup", endPointer3d);
-canvas3dEl.addEventListener("pointercancel", endPointer3d);
 
-canvas3dEl.addEventListener("wheel", (e) => {
-  if (!scene3d) return;
+function onWheel3D(e) {
+  const active = activeScene3D();
+  if (!active) return;
   e.preventDefault();
-  scene3d.orbit.radius = clamp(scene3d.orbit.radius * Math.exp(e.deltaY * 0.001), 0.5, 60);
-  updateCameraFromOrbit();
-  render3d();
-}, { passive: false });
+  active.orbit.radius = clamp(active.orbit.radius * Math.exp(e.deltaY * 0.001), 0.5, 60);
+  activeUpdateCamera3D();
+  activeRender3D();
+}
+
+[canvas3dEl, canvasMechanismEl, canvasPartsEl].forEach((el3d) => {
+  el3d.addEventListener("pointerdown", onPointerDown3D);
+  el3d.addEventListener("pointermove", onPointerMove3D);
+  el3d.addEventListener("pointerup", endPointer3d);
+  el3d.addEventListener("pointercancel", endPointer3d);
+  el3d.addEventListener("wheel", onWheel3D, { passive: false });
+});
 
 /* ---- побудова геометрії з даних /api/scene3d ---- */
+
+function disposeThreeObject(object) {
+  if (object.geometry) object.geometry.dispose();
+  if (object.material) {
+    if (Array.isArray(object.material)) object.material.forEach((m) => m.dispose());
+    else object.material.dispose();
+  }
+}
 
 function clearThreeGroup(group) {
   while (group.children.length > 0) {
     const child = group.children.pop();
     group.remove(child);
-    if (child.geometry) child.geometry.dispose();
-    if (child.material) {
-      if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
-      else child.material.dispose();
-    }
+    // traverse, не лише сам child: OCCT-геометрія (труба/підлога/стіна,
+    // web/static/js/geometry/geometry-controller.js) кладе Mesh +
+    // LineSegments (контур ребер) у вкладену THREE.Group, а не напряму.
+    child.traverse(disposeThreeObject);
   }
 }
 
@@ -1252,7 +1522,39 @@ function tileTextureAppliesTo(isFloor, wallIndex) {
   return isFloor ? state.selectedWallIndex === null : state.selectedWallIndex === wallIndex;
 }
 
-function buildWallMesh(wallData) {
+function wallColor(wallData) {
+  return MATERIAL_CATEGORY_COLORS[wallData.material_category] ?? DEFAULT_WALL_COLOR;
+}
+
+// Плитку (модуль 2) кладемо як текстуру на матеріал уже готового
+// тіла — і на легке прев'ю, і на OCCT-результат, коли він прийде
+// (спільна логіка, щоб не дублювати її двічі).
+function applyWallTileTexture(material, wallData) {
+  if (!tileTextureAppliesTo(false, wallData.index)) return;
+  const tile = buildTileTexture();
+  if (!tile) return;
+  const lengthM = wallData.length_mm / 1000, heightM = wallData.height_mm / 1000;
+  tile.texture.repeat.set(lengthM / tile.repeatUnitM, heightM / tile.repeatUnitHM);
+  material.map = tile.texture;
+  material.color.set(0xffffff);
+}
+
+function applyFloorTileTexture(material, contour) {
+  if (!tileTextureAppliesTo(true, null)) return;
+  const tile = buildTileTexture();
+  if (!tile) return;
+  const bounds = boundsOfPoints(contour.map(([x, z]) => ({ x, z })));
+  const wM = (bounds.maxX - bounds.minX) / 1000, hM = (bounds.maxZ - bounds.minZ) / 1000;
+  tile.texture.repeat.set(wM / tile.repeatUnitM, hM / tile.repeatUnitHM);
+  material.map = tile.texture;
+  material.color.set(0xffffff);
+}
+
+function buildWallPreviewMesh(wallData) {
+  // Легке THREE.ExtrudeGeometry-прев'ю — стоїть на місці справжнього
+  // тіла, поки крутиться OCCT-рахунок (ensureGeometryController().
+  // buildWall), інакше стіна на мить зникає з 3D-сцени щоразу як
+  // rebuildScene3D перебудовує групи.
   const [x0, z0] = wallData.start;
   const [x1, z1] = wallData.end;
   const lengthM = wallData.length_mm / 1000;
@@ -1283,39 +1585,24 @@ function buildWallMesh(wallData) {
   geometry.translate(0, 0, -thicknessM / 2);
   geometry.rotateY(-angle);
 
-  const color = MATERIAL_CATEGORY_COLORS[wallData.material_category] ?? DEFAULT_WALL_COLOR;
-  const material = new THREE.MeshLambertMaterial({ color });
-  if (tileTextureAppliesTo(false, wallData.index)) {
-    const tile = buildTileTexture();
-    if (tile) {
-      tile.texture.repeat.set(lengthM / tile.repeatUnitM, heightM / tile.repeatUnitHM);
-      material.map = tile.texture;
-      material.color.set(0xffffff);
-    }
-  }
+  const material = new THREE.MeshLambertMaterial({ color: wallColor(wallData), transparent: true, opacity: 0.6 });
+  applyWallTileTexture(material, wallData);
 
   const mesh = new THREE.Mesh(geometry, material);
   mesh.position.set(x0 / 1000, 0, z0 / 1000);
+  mesh.userData.wallIndex = wallData.index; // щоб сховати цю стіну під час розльоту її шарів
   return mesh;
 }
 
-function buildFloorMesh(contour, thicknessM) {
+function buildFloorPreviewMesh(contour, thicknessM) {
+  // Те саме прев'ю-міркування, що й buildWallPreviewMesh.
   const shape = new THREE.Shape(contour.map(([x, z]) => new THREE.Vector2(x / 1000, -z / 1000)));
   const geometry = new THREE.ExtrudeGeometry(shape, { depth: thicknessM, bevelEnabled: false, curveSegments: 4 });
   geometry.rotateX(-Math.PI / 2);
   geometry.translate(0, -thicknessM, 0); // верх плити на y=0, під підлогою кімнати
 
-  const material = new THREE.MeshLambertMaterial({ color: 0xd9d2c7 });
-  if (tileTextureAppliesTo(true, null)) {
-    const tile = buildTileTexture();
-    if (tile) {
-      const bounds = boundsOfPoints(contour.map(([x, z]) => ({ x, z })));
-      const wM = (bounds.maxX - bounds.minX) / 1000, hM = (bounds.maxZ - bounds.minZ) / 1000;
-      tile.texture.repeat.set(wM / tile.repeatUnitM, hM / tile.repeatUnitHM);
-      material.map = tile.texture;
-      material.color.set(0xffffff);
-    }
-  }
+  const material = new THREE.MeshLambertMaterial({ color: 0xd9d2c7, transparent: true, opacity: 0.6 });
+  applyFloorTileTexture(material, contour);
   return new THREE.Mesh(geometry, material);
 }
 
@@ -1335,17 +1622,125 @@ function buildRoofMesh(faces) {
   return new THREE.Mesh(geometry, material);
 }
 
-function buildDuctMesh(duct) {
+/* ---- OCCT-геометрія "Будівництва" (web/static/js/geometry/) ----
+ * Труба (повітропровід/кабель/арматура — tube.js), підлога й стіни
+ * (room.js) — один спільний Worker/бандл. Вантажиться лише при
+ * першому виклику ensureGeometryController() (динамічний import()), як
+ * і ensurePartsController() для вкладки "Деталі". Кожен build* повертає
+ * {group, mesh}: group — готовий до scene.add() THREE.Group (тіло +
+ * контур ребер, уже масштабований мм→м), mesh — сам Mesh тіла, щоб
+ * викликач міг довкладно налаштувати material (колір/текстура плитки). */
+
+let geometryControllerPromise = null;
+
+function ensureGeometryController() {
+  if (geometryControllerPromise) return geometryControllerPromise;
+  geometryControllerPromise = import("./dist/geometry/geometry-controller.js")
+    .then(({ createGeometryController }) =>
+      createGeometryController({
+        onStatus: (text) => console.info("[геометрія Будівництва]", text),
+      })
+    )
+    .catch((e) => {
+      console.error("Помилка завантаження бандла геометрії Будівництва (виконано `npm run build`?):", e);
+      geometryControllerPromise = null; // дати шанс спробувати ще раз (напр. після npm run build)
+      throw e;
+    });
+  return geometryControllerPromise;
+}
+
+// Спільний лічильник поколінь для всієї геометрії "Будівництва" (труби,
+// підлога, стіни) — бампається в rebuildScene3D одним разом на всі три,
+// бо всі три перебудовуються там одночасно; застарілі асинхронні OCCT-
+// результати з попереднього виклику rebuildScene3D просто відкидаються.
+let roomGeneration = 0;
+
+const DUCT_CEILING_MM = 2400; // орієнтовна висота прокладки повітропроводу, ближче до стелі
+
+function ductPointsMm(duct) {
+  return duct.points.map(([x, z]) => ({ x, y: DUCT_CEILING_MM, z }));
+}
+
+function ductDiameterMm(duct) {
+  return duct.diameter_mm || Math.max(duct.width_mm, duct.height_mm);
+}
+
+function buildDuctPreviewMesh(duct) {
+  // Легкий THREE.TubeGeometry-прев'ю — стоїть на місці справжнього тіла,
+  // поки крутиться OCCT-рахунок (ensureGeometryController().buildTube, у
+  // Web Worker web/static/js/geometry/worker.js), інакше повітропровід
+  // на мить зникає з 3D-сцени щоразу як rebuildScene3D перебудовує групи.
   if (duct.points.length < 2) return null;
-  const ceilingM = 2.4; // орієнтовна висота прокладки повітропроводу, ближче до стелі
+  const ceilingM = DUCT_CEILING_MM / 1000;
   const points = duct.points.map(([x, z]) => new THREE.Vector3(x / 1000, ceilingM, z / 1000));
   const path = new THREE.CurvePath();
   for (let i = 0; i < points.length - 1; i++) path.add(new THREE.LineCurve3(points[i], points[i + 1]));
-  const diameterMm = duct.diameter_mm || Math.max(duct.width_mm, duct.height_mm);
-  const radiusM = Math.max(0.02, diameterMm / 2000);
+  const radiusM = Math.max(0.02, ductDiameterMm(duct) / 2000);
   const geometry = new THREE.TubeGeometry(path, Math.max(2, points.length * 3), radiusM, 6, false);
-  const material = new THREE.MeshLambertMaterial({ color: DUCT_COLOR });
+  const material = new THREE.MeshLambertMaterial({ color: DUCT_COLOR, transparent: true, opacity: 0.6 });
   return new THREE.Mesh(geometry, material);
+}
+
+function addDuctToScene(duct) {
+  const preview = buildDuctPreviewMesh(duct);
+  if (preview) scene3d.ductsGroup.add(preview);
+
+  const points = ductPointsMm(duct);
+  if (points.length < 2) return;
+
+  const generation = roomGeneration;
+  ensureGeometryController()
+    .then((controller) => controller.buildTube({ points, diameterMm: ductDiameterMm(duct), color: DUCT_COLOR }))
+    .then(({ group }) => {
+      if (generation !== roomGeneration) return; // сцену вже перебудовано наново — цей результат застарів
+      if (preview) { scene3d.ductsGroup.remove(preview); disposeThreeObject(preview); }
+      scene3d.ductsGroup.add(group);
+      activeRender3D();
+    })
+    .catch((e) => {
+      console.error("Не вдалося побудувати тіло повітропроводу через OCCT (лишається спрощене прев'ю):", e);
+    });
+}
+
+function addFloorToScene(contour, thicknessMm) {
+  const preview = buildFloorPreviewMesh(contour, thicknessMm / 1000);
+  scene3d.floorGroup.add(preview);
+
+  const generation = roomGeneration;
+  ensureGeometryController()
+    .then((controller) => controller.buildFloor({ contour, thicknessMm, color: 0xd9d2c7 }))
+    .then(({ group, mesh }) => {
+      if (generation !== roomGeneration) return;
+      applyFloorTileTexture(mesh.material, contour);
+      scene3d.floorGroup.remove(preview);
+      disposeThreeObject(preview);
+      scene3d.floorGroup.add(group);
+      activeRender3D();
+    })
+    .catch((e) => {
+      console.error("Не вдалося побудувати підлогу через OCCT (лишається спрощене прев'ю):", e);
+    });
+}
+
+function addWallToScene(wallData) {
+  const preview = buildWallPreviewMesh(wallData);
+  scene3d.wallsGroup.add(preview);
+
+  const generation = roomGeneration;
+  ensureGeometryController()
+    .then((controller) => controller.buildWall({ wallData, color: wallColor(wallData) }))
+    .then(({ group, mesh }) => {
+      if (generation !== roomGeneration) return;
+      applyWallTileTexture(mesh.material, wallData);
+      group.userData.wallIndex = wallData.index; // щоб сховати цю стіну під час розльоту її шарів
+      scene3d.wallsGroup.remove(preview);
+      disposeThreeObject(preview);
+      scene3d.wallsGroup.add(group);
+      activeRender3D();
+    })
+    .catch((e) => {
+      console.error("Не вдалося побудувати стіну через OCCT (лишається спрощене прев'ю):", e);
+    });
 }
 
 function buildRouteLine(points2d) {
@@ -1364,6 +1759,325 @@ function buildFixtureMarker(position2d, ceilingHeightM) {
   return mesh;
 }
 
+/* ---- демо-стенд руху (kovadlo/motion.py, вкладка «3D» -> «Час») ----
+ *
+ * Геометрія кожної деталі "запечена" (`BufferGeometry.translate`) в її
+ * реальну світову позицію на клієнті — так само в м і з дзеркаленням Z,
+ * як і вся решта сцени. Завдяки цьому серверна 4x4-матриця з
+ * /api/motion/state (web/motion_state.py::_to_three_matrix) можна
+ * підставляти в group.matrix НАПРЯМУ (matrixAutoUpdate=false): при
+ * t=0 усі рухи ядра тотожні (Rotation на 0°, Linear зі зсувом 0), тому
+ * матриця — точна одинична, і "запечена" геометрія відразу на місці. */
+
+const MOTION_SPOKE_COLOR = 0x222222;
+
+function threePosition(positionMm) {
+  // Без дзеркалення Z: світильники (buildFixtureMarker) і OCCT-геометрія
+  // "Будівництва" (geometry-controller.js::buildTube/buildFloor/
+  // buildWall — світові мм напряму, лише групу масштабовано ×0.001)
+  // кладуть x/1000,y/1000,z/1000 напряму. Виняток — старі THREE-прев'ю
+  // (buildWallPreviewMesh, buildFloorPreviewMesh, buildDuctPreviewMesh):
+  // вони й досі будують локальну 2D-форму й трансформують, і
+  // buildFloorPreviewMesh негує Z як компенсацію власного rotateX(-90°)
+  // — це їхній локальний хак, не конвенція сцени.
+  return [positionMm[0] / 1000, positionMm[1] / 1000, positionMm[2] / 1000];
+}
+
+function buildMotionRigObject(part) {
+  const group = new THREE.Group();
+  const [px, py, pz] = threePosition(part.position_mm);
+  const color = parseInt(part.color.slice(1), 16);
+
+  if (part.kind === "gear") {
+    const radiusM = part.radius_mm / 1000;
+    const thicknessM = part.thickness_mm / 1000;
+    const diskGeom = new THREE.CylinderGeometry(radiusM, radiusM, thicknessM, 24);
+    diskGeom.translate(px, py, pz);
+    group.add(new THREE.Mesh(diskGeom, new THREE.MeshLambertMaterial({ color })));
+
+    // асиметрична "спиця": сам диск обертово-симетричний, без неї
+    // обертання навколо власної осі на екрані непомітне.
+    const spokeGeom = new THREE.BoxGeometry(radiusM * 0.9, thicknessM * 1.2, radiusM * 0.12);
+    spokeGeom.translate(px + radiusM * 0.45, py, pz);
+    group.add(new THREE.Mesh(spokeGeom, new THREE.MeshLambertMaterial({ color: MOTION_SPOKE_COLOR })));
+  } else {
+    const sizeM = part.size_mm / 1000;
+    const boxGeom = new THREE.BoxGeometry(sizeM, sizeM, sizeM);
+    boxGeom.translate(px, py, pz);
+    group.add(new THREE.Mesh(boxGeom, new THREE.MeshLambertMaterial({ color })));
+  }
+
+  group.matrixAutoUpdate = false;
+  group.userData.motionName = part.name;
+  return group;
+}
+
+// Розліт шарів стіни (режим "Будівництво") — торкається лише
+// wallExplosionGroup; демо-стенд руху тепер зовсім інша сцена
+// (applyMechanismState, режим "Механізми").
+function applyMotionState(parts) {
+  if (!scene3d) return;
+  scene3d.wallExplosionGroup.children.forEach((group) => {
+    const part = parts[group.userData.motionName];
+    if (!part) return;
+    group.matrix.set(...part.matrix);
+    group.matrixWorldNeedsUpdate = true;
+  });
+}
+
+function applyMechanismState(parts) {
+  if (!mechanismScene3d) return;
+  mechanismScene3d.motionGroup.children.forEach((group) => {
+    const part = parts[group.userData.motionName];
+    if (!part) return;
+    group.matrix.set(...part.matrix);
+    group.matrixWorldNeedsUpdate = true;
+  });
+}
+
+/* ---- розліт (exploded view) шарів обраної стіни (вкладка «3D», секція
+ * «Час»): один бокс на шар, зі своєю товщиною й підписом матеріал+товщина,
+ * рахує kovadlo.exploded_view_motion_plan через /api/motion/state. */
+
+const WALL_LAYER_COLORS = [0xd9c9a8, 0xb5651d, 0x8fa8c9, 0xc9a24b, 0x7ad6e0, 0xc96b4b, 0x9fd88f, 0xd88fd0];
+const WALL_LABEL_STEP_M = 0.4;          // крок висоти між підписами сусідніх шарів
+const WALL_LABEL_BASE_HEIGHT_M = 0.35;  // висота підпису на "еталонній" відстані
+const WALL_LABEL_REFERENCE_DISTANCE_M = 5; // відстань камера->підпис, на якій розмір "еталонний"
+const WALL_LABEL_MIN_HEIGHT_M = 0.08;
+const WALL_LABEL_MAX_HEIGHT_M = 1.2;
+
+// THREE.Sprite.scale заданий у метрах світу, тому апарентний розмір на
+// екрані змінюється з відстанню до камери (перспектива) — щоб підпис не
+// займав пів екрана зблизька й не зникав здалеку, масштаб перераховуємо
+// щокадру пропорційно відстані камера->підпис (константний розмір у
+// пікселях, а не в метрах світу).
+function updateWallExplosionLabelScales() {
+  if (!scene3d) return;
+  const cameraPos = scene3d.camera.position;
+  const worldPos = new THREE.Vector3();
+  scene3d.wallExplosionGroup.children.forEach((group) => {
+    const label = group.children.find((child) => child.isSprite);
+    if (!label) return;
+    worldPos.copy(label.position).applyMatrix4(group.matrix);
+    const distance = cameraPos.distanceTo(worldPos);
+    const heightM = clamp(
+      WALL_LABEL_BASE_HEIGHT_M * (distance / WALL_LABEL_REFERENCE_DISTANCE_M),
+      WALL_LABEL_MIN_HEIGHT_M,
+      WALL_LABEL_MAX_HEIGHT_M
+    );
+    label.scale.set(label.userData.aspect * heightM, heightM, 1);
+  });
+}
+
+function buildTextSprite(text) {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  const lines = text.split("\n");
+  const fontSize = 44;
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  const textWidth = Math.max(...lines.map((line) => ctx.measureText(line).width));
+  const paddingX = 24, paddingY = 16, lineHeight = fontSize * 1.25;
+  canvas.width = Math.ceil(textWidth + paddingX * 2);
+  canvas.height = Math.ceil(lineHeight * lines.length + paddingY * 2);
+
+  ctx.font = `bold ${fontSize}px sans-serif`; // resize canvas скидає контекст — виставити шрифт знову
+  ctx.fillStyle = "rgba(20,22,26,0.85)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#ffffff";
+  ctx.textBaseline = "top";
+  lines.forEach((line, i) => ctx.fillText(line, paddingX, paddingY + i * lineHeight));
+
+  const texture = new THREE.CanvasTexture(canvas);
+  const material = new THREE.SpriteMaterial({ map: texture, depthTest: false, depthWrite: false });
+  const sprite = new THREE.Sprite(material);
+  sprite.userData.aspect = canvas.width / canvas.height; // для перерахунку масштабу за відстанню
+  sprite.scale.set(sprite.userData.aspect * WALL_LABEL_BASE_HEIGHT_M, WALL_LABEL_BASE_HEIGHT_M, 1);
+  sprite.renderOrder = 999; // завжди поверх боксів шарів
+  return sprite;
+}
+
+function buildWallExplosionLayerObject(part, index) {
+  const group = new THREE.Group();
+  const lengthM = part.length_mm / 1000;
+  const heightM = part.height_mm / 1000;
+  const thicknessM = part.thickness_mm / 1000;
+  const angleRad = (part.angle_deg * Math.PI) / 180;
+  const [cx, cy, cz] = threePosition(part.position_mm); // центр шару в зібраному (t=0) стані
+
+  // той самий підхід (rotateY(-angle) на кут стіни, потім позиція),
+  // що й buildWallPreviewMesh — лише коробка центрована в (0,0,0), а не
+  // від кута стіни, бо тут запікаємо ЦЕНТР шару, а не її стартову точку.
+  const geometry = new THREE.BoxGeometry(lengthM, heightM, thicknessM);
+  geometry.rotateY(-angleRad);
+  geometry.translate(cx, cy, cz);
+  const color = WALL_LAYER_COLORS[index % WALL_LAYER_COLORS.length];
+  group.add(new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ color })));
+
+  // номер — порядок монтажу (від основи назовні, index+1); підписи
+  // рознесені по висоті (крок на кожен наступний шар), інакше вони
+  // майже збігаються по Y і налазять один на одного, коли шари
+  // роз'їхались лише по тонкій осі товщини стіни.
+  const label = buildTextSprite(`${index + 1}. ${part.name}, ${Math.round(part.thickness_mm)} мм`);
+  label.position.set(cx, cy + heightM / 2 + 0.15 + index * WALL_LABEL_STEP_M, cz);
+  group.add(label);
+
+  group.matrixAutoUpdate = false;
+  group.userData.motionName = part.motion_name;
+  return group;
+}
+
+async function refreshMotionState(t) {
+  if (!state.room || !scene3d) return;
+  if (motionScrubInFlight) {
+    // запит уже летить — не плодимо паралельні (їхні відповіді можуть
+    // повернутися не в тому порядку й "відкотити" кадр назад); просто
+    // запам'ятовуємо останнє значення й дошлемо його одразу по завершенні.
+    motionScrubPendingT = t;
+    return;
+  }
+  motionScrubInFlight = true;
+  try {
+    const data = await apiPost("/api/motion/state", { ts: [t] });
+    applyMotionState(data.frames[0].parts);
+    render3d();
+  } catch (e) {
+    console.error(e);
+  } finally {
+    motionScrubInFlight = false;
+    if (motionScrubPendingT !== null) {
+      const nextT = motionScrubPendingT;
+      motionScrubPendingT = null;
+      refreshMotionState(nextT);
+    }
+  }
+}
+
+function motionFrameTimes() {
+  const steps = Math.round(MOTION_MAX_T * MOTION_PLAYBACK_FPS);
+  const ts = [];
+  for (let i = 0; i <= steps; i++) ts.push(Math.min(MOTION_MAX_T, i / MOTION_PLAYBACK_FPS));
+  return ts;
+}
+
+// "Відтворити" тягне ВЕСЬ цикл ОДНИМ POST-запитом і далі програє кадри
+// локально (requestAnimationFrame, без мережі) — на відміну від
+// повзунка вручну, який шле по одному кадру на подію.
+async function startMotionPlayback(slider, valueLabel, playBtn) {
+  playBtn.disabled = true;
+  playBtn.textContent = "Завантаження…";
+  try {
+    const data = await apiPost("/api/motion/state", { ts: motionFrameTimes() });
+    motionFrames = data.frames;
+  } catch (e) {
+    console.error(e);
+    playBtn.disabled = false;
+    playBtn.textContent = "▶ Відтворити";
+    return;
+  }
+
+  state.scene3d.motionPlaying = true;
+  playBtn.disabled = false;
+  playBtn.textContent = "⏸ Пауза";
+  motionPlayStartMs = performance.now();
+  motionPlayStartT = state.scene3d.motionT;
+
+  function tick(nowMs) {
+    if (!state.scene3d.motionPlaying) return;
+    const elapsed = (nowMs - motionPlayStartMs) / 1000;
+    const t = (motionPlayStartT + elapsed) % MOTION_MAX_T;
+    state.scene3d.motionT = t;
+    const frameIndex = Math.min(motionFrames.length - 1, Math.round(t * MOTION_PLAYBACK_FPS));
+    slider.value = t;
+    valueLabel.textContent = `${t.toFixed(2)} с`;
+    applyMotionState(motionFrames[frameIndex].parts);
+    render3d();
+    motionRAF = requestAnimationFrame(tick);
+  }
+  motionRAF = requestAnimationFrame(tick);
+}
+
+function stopMotionPlayback() {
+  state.scene3d.motionPlaying = false;
+  if (motionRAF) cancelAnimationFrame(motionRAF);
+  motionRAF = null;
+  const btn = document.getElementById("btn-motion-play");
+  if (btn) { btn.textContent = "▶ Відтворити"; btn.disabled = false; }
+}
+
+/* ---- те саме, для демо-стенду руху режиму "Механізми" (/api/mechanism/state) ---- */
+
+async function refreshMechanismMotionState(t) {
+  if (!mechanismScene3d) return;
+  if (mechanismScrubInFlight) {
+    mechanismScrubPendingT = t;
+    return;
+  }
+  mechanismScrubInFlight = true;
+  try {
+    const data = await apiPost("/api/mechanism/state", { ts: [t] });
+    applyMechanismState(data.frames[0].parts);
+    renderMechanismScene();
+  } catch (e) {
+    console.error(e);
+  } finally {
+    mechanismScrubInFlight = false;
+    if (mechanismScrubPendingT !== null) {
+      const nextT = mechanismScrubPendingT;
+      mechanismScrubPendingT = null;
+      refreshMechanismMotionState(nextT);
+    }
+  }
+}
+
+function mechanismFrameTimes() {
+  const steps = Math.round(MOTION_MAX_T * MOTION_PLAYBACK_FPS);
+  const ts = [];
+  for (let i = 0; i <= steps; i++) ts.push(Math.min(MOTION_MAX_T, i / MOTION_PLAYBACK_FPS));
+  return ts;
+}
+
+async function startMechanismPlayback(slider, valueLabel, playBtn) {
+  playBtn.disabled = true;
+  playBtn.textContent = "Завантаження…";
+  try {
+    const data = await apiPost("/api/mechanism/state", { ts: mechanismFrameTimes() });
+    mechanismMotionFrames = data.frames;
+  } catch (e) {
+    console.error(e);
+    playBtn.disabled = false;
+    playBtn.textContent = "▶ Відтворити";
+    return;
+  }
+
+  mechanismState.motionPlaying = true;
+  playBtn.disabled = false;
+  playBtn.textContent = "⏸ Пауза";
+  mechanismPlayStartMs = performance.now();
+  mechanismPlayStartT = mechanismState.motionT;
+
+  function tick(nowMs) {
+    if (!mechanismState.motionPlaying) return;
+    const elapsed = (nowMs - mechanismPlayStartMs) / 1000;
+    const t = (mechanismPlayStartT + elapsed) % MOTION_MAX_T;
+    mechanismState.motionT = t;
+    const frameIndex = Math.min(mechanismMotionFrames.length - 1, Math.round(t * MOTION_PLAYBACK_FPS));
+    slider.value = t;
+    valueLabel.textContent = `${t.toFixed(2)} с`;
+    applyMechanismState(mechanismMotionFrames[frameIndex].parts);
+    renderMechanismScene();
+    mechanismRAF = requestAnimationFrame(tick);
+  }
+  mechanismRAF = requestAnimationFrame(tick);
+}
+
+function stopMechanismPlayback() {
+  mechanismState.motionPlaying = false;
+  if (mechanismRAF) cancelAnimationFrame(mechanismRAF);
+  mechanismRAF = null;
+  const btn = document.getElementById("btn-mechanism-play");
+  if (btn) { btn.textContent = "▶ Відтворити"; btn.disabled = false; }
+}
+
 function rebuildScene3D(data) {
   ensureThreeScene();
   clearThreeGroup(scene3d.wallsGroup);
@@ -1372,15 +2086,34 @@ function rebuildScene3D(data) {
   clearThreeGroup(scene3d.ductsGroup);
   clearThreeGroup(scene3d.routesGroup);
   clearThreeGroup(scene3d.fixturesGroup);
+  clearThreeGroup(scene3d.wallExplosionGroup);
+  roomGeneration++; // одним разом на труби/підлогу/стіни — усі перебудовуються тут
+  stopMotionPlayback();
+  motionFrames = null;
+  motionScrubPendingT = null;
 
   const room = data.room;
   const wallHeightM = (room.walls[0]?.height_mm || 2700) / 1000;
   const isFirstLoad = state.scene3d.data === null;
 
-  scene3d.floorGroup.add(buildFloorMesh(room.contour, data.floor_slab.thickness_mm / 1000));
+  addFloorToScene(room.contour, data.floor_slab.thickness_mm);
 
-  room.walls.forEach((wallData) => scene3d.wallsGroup.add(buildWallMesh(wallData)));
+  room.walls.forEach((wallData) => addWallToScene(wallData));
   scene3d.wallsGroup.visible = state.scene3d.showWalls;
+
+  if (data.motion_exploded_wall) {
+    // суцільна стіна схована на час розльоту — інакше на t=0 вона
+    // накладається на щойно зібрані шари (двійник геометрії). Працює і
+    // для прев'ю (Mesh), і для готового OCCT-тіла (Group): .visible на
+    // Group ховає всі її діти разом (тіло + контур ребер).
+    const explodedIndex = data.motion_exploded_wall.wall_index;
+    scene3d.wallsGroup.children.forEach((child) => {
+      if (child.userData.wallIndex === explodedIndex) child.visible = false;
+    });
+    data.motion_exploded_wall.layers.forEach((layer, i) =>
+      scene3d.wallExplosionGroup.add(buildWallExplosionLayerObject(layer, i))
+    );
+  }
 
   if (data.roof) {
     scene3d.roofGroup.add(buildRoofMesh(data.roof.faces));
@@ -1391,14 +2124,13 @@ function rebuildScene3D(data) {
   }
   scene3d.roofGroup.visible = state.scene3d.showRoof;
 
-  data.ducts.forEach((duct) => {
-    const mesh = buildDuctMesh(duct);
-    if (mesh) scene3d.ductsGroup.add(mesh);
-  });
+  data.ducts.forEach((duct) => addDuctToScene(duct));
 
   Object.values(data.electrical_routes).forEach((points) => scene3d.routesGroup.add(buildRouteLine(points)));
 
   data.fixtures.forEach((fixture) => scene3d.fixturesGroup.add(buildFixtureMarker(fixture.position, wallHeightM)));
+
+  if (data.motion_exploded_wall) refreshMotionState(state.scene3d.motionT); // одразу в поточний момент, не в t=0
 
   if (isFirstLoad) {
     const bounds = boundsOfPoints(room.contour.map(([x, z]) => ({ x, z })));
@@ -1425,6 +2157,36 @@ async function refreshScene3D() {
     console.error(e);
   }
   renderScene3DPanel();
+}
+
+/* ---- режим "Механізми": окрема сцена, будується з /api/mechanism/scene ---- */
+
+function rebuildMechanismScene(data) {
+  ensureMechanismScene();
+  clearThreeGroup(mechanismScene3d.motionGroup);
+  stopMechanismPlayback();
+  mechanismMotionFrames = null;
+  mechanismScrubPendingT = null;
+
+  const isFirstLoad = mechanismState.data === null;
+  (data.motion_rig || []).forEach((part) => mechanismScene3d.motionGroup.add(buildMotionRigObject(part)));
+
+  if (isFirstLoad) fitOrbitToRig(mechanismScene3d.orbit, data.motion_rig);
+
+  mechanismState.data = data;
+  refreshMechanismMotionState(mechanismState.motionT); // одразу в поточний момент, не в t=0
+  updateMechanismCameraFromOrbit();
+  renderMechanismScene();
+}
+
+async function refreshMechanismScene() {
+  try {
+    const data = await apiGet("/api/mechanism/scene");
+    rebuildMechanismScene(data);
+  } catch (e) {
+    console.error(e);
+  }
+  renderMechanismPanel();
 }
 
 /* ---- дах і отвори (керування з панелі) ---- */
@@ -2084,12 +2846,13 @@ function syncLayoutStartInputs() {
 
 function setTab(tab) {
   state.tab = tab;
-  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  document.querySelectorAll("#building-tabs .tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
 
   const is3d = tab === "3d";
+  if (!is3d) stopMotionPlayback();
   canvas.style.display = is3d ? "none" : "block";
   canvas3dEl.style.display = is3d ? "block" : "none";
-  document.getElementById("view-buttons").style.display = is3d ? "flex" : "none";
+  document.getElementById("view-toolbar").style.display = is3d ? "flex" : "none";
 
   if (is3d) {
     ensureThreeScene();
@@ -2102,8 +2865,55 @@ function setTab(tab) {
   updateHint();
   redraw();
 }
-document.querySelectorAll(".tab-btn").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
-document.querySelectorAll("#view-buttons button").forEach(b => b.addEventListener("click", () => setQuickView3D(b.dataset.view)));
+document.querySelectorAll("#building-tabs .tab-btn").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+document.querySelectorAll("#view-toolbar button").forEach(b => b.addEventListener("click", () => setQuickView3D(b.dataset.view)));
+
+// ---- перемикач режимів: «Будівництво» (кімната) / «Механізми» (стенд) ----
+
+function setAppMode(mode) {
+  const previousMode = appMode;
+  appMode = mode;
+  document.querySelectorAll(".mode-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
+  document.getElementById("building-tabs").style.display = mode === "building" ? "flex" : "none";
+  document.getElementById("mechanism-tabs").style.display = mode === "mechanism" ? "flex" : "none";
+
+  if (previousMode === "building" && mode !== "building") stopMotionPlayback();
+  if (previousMode === "mechanism" && mode !== "mechanism") stopMechanismPlayback();
+
+  canvas.style.display = mode === "building" && state.tab !== "3d" ? "block" : "none";
+  canvas3dEl.style.display = mode === "building" && state.tab === "3d" ? "block" : "none";
+  canvasMechanismEl.style.display = mode === "mechanism" ? "block" : "none";
+  canvasPartsEl.style.display = mode === "parts" ? "block" : "none";
+
+  const is3dCanvasVisible = mode !== "building" || state.tab === "3d";
+  document.getElementById("view-toolbar").style.display = is3dCanvasVisible ? "flex" : "none";
+
+  if (mode === "building") {
+    if (state.tab === "3d") resizeScene3D();
+    renderPanel();
+    updateHint();
+    redraw();
+  } else if (mode === "mechanism") {
+    ensureMechanismScene();
+    resizeMechanismScene();
+    if (!mechanismState.data) refreshMechanismScene();
+    else renderMechanismScene();
+    renderMechanismPanel();
+  } else if (mode === "parts") {
+    ensurePartsScene();
+    resizePartsScene();
+    ensurePartsController().then(() => loadPart(partsState.code));
+    renderPartsPanel();
+  }
+}
+document.querySelectorAll(".mode-btn").forEach(b => b.addEventListener("click", () => setAppMode(b.dataset.mode)));
+
+function setMechanismTab(tab) {
+  mechanismState.tab = tab;
+  document.querySelectorAll("#mechanism-tabs .tab-btn").forEach(b => b.classList.toggle("active", b.dataset.mechTab === tab));
+  renderMechanismPanel();
+}
+document.querySelectorAll("#mechanism-tabs .tab-btn").forEach(b => b.addEventListener("click", () => setMechanismTab(b.dataset.mechTab)));
 
 function updateHint() {
   let text = "";
@@ -2385,11 +3195,17 @@ function buildPendingPointItem(point) {
     csInput.title = "Мінімальний переріз, мм²";
     csInput.style.width = "56px";
     csInput.value = (point.kind === "SOCKET" || point.kind === "BOILER") ? "2.5" : (point.kind === "STOVE" ? "6" : "1.5");
+    const pwInput = document.createElement("input");
+    pwInput.type = "number";
+    pwInput.step = "50";
+    pwInput.title = "Потужність, Вт";
+    pwInput.style.width = "64px";
+    pwInput.value = Math.round(point.power_w || 0);
     const assignBtn = document.createElement("button");
     assignBtn.className = "primary";
     assignBtn.textContent = "OK";
-    assignBtn.addEventListener("click", () => assignGroup(point.name, nameInput.value.trim(), phaseSelect.value, csInput.value));
-    row.append(nameInput, phaseSelect, csInput, assignBtn);
+    assignBtn.addEventListener("click", () => assignGroup(point.name, nameInput.value.trim(), phaseSelect.value, csInput.value, pwInput.value));
+    row.append(nameInput, phaseSelect, csInput, pwInput, assignBtn);
     wrap.appendChild(row);
   }
 
@@ -3011,6 +3827,85 @@ function renderScene3DPanel() {
   visSection.querySelector("#btn-toggle-roof").addEventListener("click", toggleRoofVisible);
   visSection.querySelector("#btn-toggle-walls").addEventListener("click", toggleWallsVisible);
 
+  const wallsWithLayers = (s3.data ? s3.data.room.walls : []).filter((w) => w.has_layers);
+  const explodedIndex = s3.data && s3.data.motion_exploded_wall ? s3.data.motion_exploded_wall.wall_index : null;
+  const explosionSection = el(`
+    <section>
+      <h2>Розліт шарів стіни</h2>
+      ${
+        wallsWithLayers.length
+          ? `<div class="field">
+              <select id="motion-wall-select">
+                <option value="">— не обрано —</option>
+                ${wallsWithLayers
+                  .map(
+                    (w) =>
+                      `<option value="${w.index}" ${w.index === explodedIndex ? "selected" : ""}>Стіна ${w.index + 1} (${Math.round(w.length_mm)} мм)</option>`
+                  )
+                  .join("")}
+              </select>
+            </div>
+            ${
+              explodedIndex !== null && s3.data.motion_exploded_wall
+                ? (() => {
+                    const layers = s3.data.motion_exploded_wall.layers;
+                    const totalMm = layers.reduce((sum, l) => sum + l.thickness_mm, 0);
+                    return `
+                      <div class="field">
+                        <input id="motion-time" type="range" min="0" max="${MOTION_MAX_T}" step="0.05" value="${s3.motionT}" style="width:100%">
+                      </div>
+                      <div class="row2">
+                        <span id="motion-time-value" class="muted">${s3.motionT.toFixed(2)} с</span>
+                        <button class="primary" id="btn-motion-play">${s3.motionPlaying ? "⏸ Пауза" : "▶ Відтворити"}</button>
+                      </div>
+                      <div id="motion-wall-layer-list" style="margin-top:8px">
+                        ${layers
+                          .map(
+                            (l, i) =>
+                              `<div class="sub">${i + 1}. ${l.name}, ${Math.round(l.thickness_mm)} мм</div>`
+                          )
+                          .join("")}
+                      </div>
+                      <p class="muted"><b>Загальна товщина пакета: ${Math.round(totalMm)} мм</b></p>
+                    `;
+                  })()
+                : `<p class="muted">Оберіть стіну зі списку, щоб побачити її шари в розльоті з повзунком часу.</p>`
+            }`
+          : `<p class="muted">Задайте шари хоча б для однієї стіни на вкладці «Тепло» — тоді її можна буде обрати тут для розльоту.</p>`
+      }
+    </section>
+  `);
+  panelEl.appendChild(explosionSection);
+  const wallSelect = explosionSection.querySelector("#motion-wall-select");
+  if (wallSelect) {
+    wallSelect.addEventListener("change", async () => {
+      const wallIndex = wallSelect.value === "" ? null : Number(wallSelect.value);
+      try {
+        await apiPost("/api/motion/select_wall", { wall_index: wallIndex });
+        await refreshScene3D();
+      } catch (e) {
+        alert("Не вдалося обрати стіну для розльоту: " + e.message);
+      }
+    });
+  }
+
+  const motionSlider = explosionSection.querySelector("#motion-time");
+  if (motionSlider) {
+    const motionValueLabel = explosionSection.querySelector("#motion-time-value");
+    const motionPlayBtn = explosionSection.querySelector("#btn-motion-play");
+    motionSlider.addEventListener("input", () => {
+      stopMotionPlayback();
+      const t = Number(motionSlider.value);
+      state.scene3d.motionT = t;
+      motionValueLabel.textContent = `${t.toFixed(2)} с`;
+      refreshMotionState(t);
+    });
+    motionPlayBtn.addEventListener("click", () => {
+      if (state.scene3d.motionPlaying) stopMotionPlayback();
+      else startMotionPlayback(motionSlider, motionValueLabel, motionPlayBtn);
+    });
+  }
+
   const wallOptions = state.room.walls
     .map((w, i) => `<option value="${i}">Стіна ${i + 1} (${Math.round(w.length_mm)} мм)</option>`)
     .join("");
@@ -3092,6 +3987,126 @@ function renderScene3DPanel() {
       <p class="muted">Плитка малюється текстурою-патерном, а не окремими об'єктами.</p>
     </section>
   `));
+}
+
+/* ---- режим "Механізми": панель праворуч, дві вкладки ("3D"/"Час") ---- */
+
+function renderMechanismPanel() {
+  panelEl.innerHTML = "";
+  if (mechanismState.tab === "time") {
+    renderMechanismTimePanel();
+  } else {
+    panelEl.appendChild(el(`
+      <section>
+        <h2>Механізм</h2>
+        <p class="muted">Дві зчеплені шестерні (Rotation + Geared.from_mesh —
+        передатне число з реального зубчастого зачеплення, kovadlo/transmission.py)
+        і деталь, що відлітає й зупиняється (Linear). Незалежна сцена без кімнати —
+        /api/mechanism/scene, /api/mechanism/state.</p>
+        <p class="muted">Кнопки видів («Зверху», «Спереду», «Ізометрія») — у смузі над сценою.
+        Вкладка «Час» — повзунок і відтворення.</p>
+      </section>
+    `));
+  }
+}
+
+function renderMechanismTimePanel() {
+  const timeSection = el(`
+    <section>
+      <h2>Час</h2>
+      <div class="field">
+        <input id="mechanism-time" type="range" min="0" max="${MOTION_MAX_T}" step="0.05" value="${mechanismState.motionT}" style="width:100%">
+      </div>
+      <div class="row2">
+        <span id="mechanism-time-value" class="muted">${mechanismState.motionT.toFixed(2)} с</span>
+        <button class="primary" id="btn-mechanism-play">${mechanismState.motionPlaying ? "⏸ Пауза" : "▶ Відтворити"}</button>
+      </div>
+      <p class="muted">Повзунок вручну шле по одному кадру на подію; «Відтворити»
+      тягне весь цикл одним запитом і програє локально.</p>
+    </section>
+  `);
+  panelEl.appendChild(timeSection);
+  const slider = timeSection.querySelector("#mechanism-time");
+  const valueLabel = timeSection.querySelector("#mechanism-time-value");
+  const playBtn = timeSection.querySelector("#btn-mechanism-play");
+  slider.addEventListener("input", () => {
+    stopMechanismPlayback();
+    const t = Number(slider.value);
+    mechanismState.motionT = t;
+    valueLabel.textContent = `${t.toFixed(2)} с`;
+    refreshMechanismMotionState(t);
+  });
+  playBtn.addEventListener("click", () => {
+    if (mechanismState.motionPlaying) stopMechanismPlayback();
+    else startMechanismPlayback(slider, valueLabel, playBtn);
+  });
+}
+
+/* ---- режим "Деталі": параметричні деталі через OCCT (replicad) у
+ * Web Worker — web/static/js/parts/. Бандл+WASM вантажаться лише при
+ * першому виклику ensurePartsController() (динамічний import()), не
+ * при завантаженні сторінки й не для інших режимів. ---- */
+
+let partsControllerPromise = null;
+
+function ensurePartsController() {
+  if (partsControllerPromise) return partsControllerPromise;
+  partsControllerPromise = import("./dist/parts/parts-viewer.js")
+    .then(({ createPartsController }) => {
+      partsController = createPartsController({
+        scene3dLike: partsScene3d,
+        onStatus: (text) => {
+          partsState.status = text;
+          renderPartsPanel();
+          activeRender3D();
+        },
+      });
+    })
+    .catch((e) => {
+      console.error(e);
+      partsState.status =
+        "Помилка завантаження бандла «Деталі»: " + e.message + " (виконано `npm run build`?)";
+      renderPartsPanel();
+      partsControllerPromise = null; // дати шанс спробувати ще раз (напр. після npm run build)
+    });
+  return partsControllerPromise;
+}
+
+function loadPart(code) {
+  partsState.code = code;
+  if (!partsController) return; // ensurePartsController() ще не завершився — він сам викличе load
+  partsController.load(code);
+}
+
+function renderPartsPanel() {
+  panelEl.innerHTML = "";
+  const catalog = partsController ? partsController.catalog : {};
+  const codes = Object.keys(catalog);
+  const section = el(`
+    <section>
+      <h2>Деталь</h2>
+      ${
+        codes.length
+          ? `<div class="field">
+              <select id="part-select">
+                ${codes
+                  .map((code) => `<option value="${code}" ${code === partsState.code ? "selected" : ""}>${code}</option>`)
+                  .join("")}
+              </select>
+            </div>`
+          : ""
+      }
+      <p class="muted">${partsState.status || "Завантаження…"}</p>
+      <p class="muted">Кулькові радіально-упорні підшипники (серія 7000) —
+      geometrія через OpenCascade (replicad), рахунок у Web Worker, не
+      блокує інтерфейс. Кільця сірі, кульки світліші.</p>
+    </section>
+  `);
+  panelEl.appendChild(section);
+  const select = section.querySelector("#part-select");
+  if (select) {
+    select.addEventListener("change", () => loadPart(select.value));
+  }
 }
 
 /* ---------------------------------------------------------------------
@@ -3241,6 +4256,20 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   });
 }
+</script>
+
+<script>
+(function(){
+  var b = document.createElement('button');
+  b.id = 'panel-toggle';
+  b.textContent = '\u203A';
+  b.onclick = function(){
+    document.body.classList.toggle('aside-hidden');
+    b.textContent = document.body.classList.contains('aside-hidden') ? '\u2039' : '\u203A';
+    window.dispatchEvent(new Event('resize'));
+  };
+  document.body.appendChild(b);
+})();
 </script>
 </body>
 </html>

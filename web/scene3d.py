@@ -14,6 +14,8 @@ from typing import Any
 from kovadlo import build_gable_roof, build_route, build_shed_roof
 from kovadlo.material_database import MaterialDatabase
 
+from .motion_state import wall_explosion_layout, wall_layers_mm_from_heat_state
+
 
 def _wall_material_category(wall: Any, material_db: MaterialDatabase) -> str | None:
     spec = material_db.find_by_name(wall.material.name)
@@ -42,6 +44,7 @@ def build_scene(state: Any, material_db: MaterialDatabase) -> dict:
                 "height_mm": wall.height,
                 "material_name": wall.material.name,
                 "material_category": _wall_material_category(wall, material_db),
+                "has_layers": bool(state.heat.wall_layers.get(i)),  # чи можна показати розліт (вкладка «3D»)
                 "openings": [
                     {
                         "name": o.name,
@@ -104,6 +107,13 @@ def build_scene(state: Any, material_db: MaterialDatabase) -> dict:
         for fixture in state.lighting.fixtures.values()
     ]
 
+    motion_exploded_wall = None
+    if state.exploded_wall_index is not None:
+        raw_layers = state.heat.wall_layers.get(state.exploded_wall_index)
+        if raw_layers:
+            wall_layers_mm = wall_layers_mm_from_heat_state(raw_layers)
+            motion_exploded_wall = wall_explosion_layout(room, state.exploded_wall_index, wall_layers_mm)
+
     return {
         "room": {
             "name": room.name,
@@ -116,4 +126,5 @@ def build_scene(state: Any, material_db: MaterialDatabase) -> dict:
         "ducts": ducts_json,
         "electrical_routes": routes_json,
         "fixtures": fixtures_json,
+        "motion_exploded_wall": motion_exploded_wall,
     }

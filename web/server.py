@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import math
+import mimetypes
 import sys
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -78,15 +79,45 @@ from kovadlo import (
 )
 from kovadlo.fire_safety_norms import COVERAGE_AREA_M2
 
+from .motion_state import (
+    build_demo_motion_plan,
+    build_wall_explosion_plan,
+    demo_motion_rig_layout,
+    merge_motion_plans,
+    serialize_motion_state,
+    wall_layers_mm_from_heat_state,
+)
 from .project_io import export_project, import_project
 from .reports import format_fire_report, format_heat_report, format_lighting_report, format_ventilation_report
 from .scene3d import build_scene
 from .tiling_render import render_tile_placements
 
 _MATERIAL_DB = build_default_database()  # спільна, лише для читання (модуль 7)
+_MAX_MOTION_FRAMES_PER_REQUEST = 2000  # захист від надто важкого одного запиту
+
+
+def _parse_motion_ts(payload: dict) -> list[float]:
+    """Валідує й повертає список моментів часу з тіла запиту — спільне
+    для `/api/motion/state` (розліт стіни) і `/api/mechanism/state`
+    (демо-стенд, окремий незалежний режим "Механізми")."""
+    ts = payload.get("ts")
+    if not isinstance(ts, list) or not ts:
+        raise ValueError("Потрібен непорожній список моментів часу 'ts'")
+    if len(ts) > _MAX_MOTION_FRAMES_PER_REQUEST:
+        raise ValueError(f"Забагато кадрів за один запит (макс. {_MAX_MOTION_FRAMES_PER_REQUEST})")
+    return [float(t) for t in ts]
 
 STATIC_DIR = Path(__file__).parent / "static"
 INDEX_FILE = STATIC_DIR / "index.html"
+
+# Бандли + WASM OCCT-вкладок ("Деталі" — web/static/js/parts/,
+# просторова лінія Будівництва — web/static/js/geometry/), обидва з
+# `npm run build` (два незалежні vite.*.config.js — див. коментар там).
+# Роздаються напряму з web/static/dist/*/ — без CDN, щоб працювало
+# офлайн в Android-застосунку (модуль 14).
+DIST_DIR = STATIC_DIR / "dist"
+DIST_ASSET_PREFIX = "/dist/"
+mimetypes.add_type("application/wasm", ".wasm")  # не всі версії Python знають цей тип за замовчуванням
 
 DEFAULT_PORT = 8765
 
@@ -205,6 +236,9 @@ class AppState:
     roof: RoofState = field(default_factory=RoofState)
     openings3d: dict[str, Opening3DState] = field(default_factory=dict)
     _opening_next_index: int = 0
+
+    # --- демо-стенд і розліт шарів стіни (kovadlo/motion.py) ---
+    exploded_wall_index: int | None = None
 
     def next_point_name(self, kind: PointKind) -> str:
         """Автогенероване ім'я точки: «Розетка 1», «Розетка 2», ..."""
@@ -425,7 +459,12 @@ def build_handler_class(state: AppState) -> type[BaseHTTPRequestHandler]:
         # ---- маршрутизація ----
 
         def do_GET(self) -> None:  # noqa: N802
-            if self.path in ("/", "/index.html"):
+            # Єдиний маршрут із префіксним (не точним) збігом self.path у
+            # цьому файлі — усе інше нижче звіряється через `==`, бо
+            # решта API не має довільних імен файлів у шляху.
+            if self.path.startswith(DIST_ASSET_PREFIX):
+                self._handle_dist_asset()
+            elif self.path in ("/", "/index.html"):
                 self._serve_index()
             elif self.path == "/api/room":
                 self._handle_get_room()
@@ -445,6 +484,8 @@ def build_handler_class(state: AppState) -> type[BaseHTTPRequestHandler]:
                 self._handle_fire_state()
             elif self.path == "/api/scene3d":
                 self._handle_scene3d()
+            elif self.path == "/api/mechanism/scene":
+                self._handle_mechanism_scene()
             elif self.path == "/api/project/export":
                 self._handle_project_export()
             else:
@@ -505,6 +546,12 @@ def build_handler_class(state: AppState) -> type[BaseHTTPRequestHandler]:
                 self._handle_opening3d_reset()
             elif self.path == "/api/project/import":
                 self._handle_project_import()
+            elif self.path == "/api/motion/state":
+                self._handle_motion_state()
+            elif self.path == "/api/motion/select_wall":
+                self._handle_motion_select_wall()
+            elif self.path == "/api/mechanism/state":
+                self._handle_mechanism_state()
             else:
                 self._send_error_json(404, "Не знайдено")
 
@@ -515,6 +562,34 @@ def build_handler_class(state: AppState) -> type[BaseHTTPRequestHandler]:
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _handle_dist_asset(self) -> None:
+            """Роздає файл із `web/static/dist/<будь-що>/` (бандл+WASM
+            OCCT-вкладок, `npm run build`) — за іменем з URL, з коректним
+            `Content-Type` (лише stdlib `mimetypes`; `.wasm` зареєстровано
+            явно вище, бо не всі версії Python знають цей тип за
+            замовчуванням). Кешується агресивно: імена файлів фіксовані
+            (без хешів у назвах), тож новий вміст вимагає нової збірки, а
+            не просто іншого URL."""
+            rel_path = self.path[len(DIST_ASSET_PREFIX) :]
+            try:
+                candidate = (DIST_DIR / rel_path).resolve()
+                candidate.relative_to(DIST_DIR.resolve())  # захист від "../.." за межі каталогу
+            except ValueError:
+                self._send_error_json(404, "Не знайдено")
+                return
+            if not candidate.is_file():
+                self._send_error_json(404, "Не знайдено — виконайте `npm run build`")
+                return
+
+            content_type, _ = mimetypes.guess_type(candidate.name)
+            body = candidate.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", content_type or "application/octet-stream")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
             self.end_headers()
             self.wfile.write(body)
 
@@ -693,6 +768,8 @@ def build_handler_class(state: AppState) -> type[BaseHTTPRequestHandler]:
                 if "max_voltage_drop_percent" in payload:
                     meta.max_voltage_drop_percent = float(payload["max_voltage_drop_percent"])
                 state.group_meta[group_name] = meta
+                if "power_w" in payload and payload["power_w"] not in (None, ""):
+                    state.points[point_name].power_w = float(payload["power_w"])
                 state.point_group[point_name] = group_name
 
                 self._send_json(200, {"point_name": point_name, "group_name": group_name})
@@ -1024,6 +1101,11 @@ def build_handler_class(state: AppState) -> type[BaseHTTPRequestHandler]:
                     state.heat.wall_layers[wall_index] = layers
                 else:
                     state.heat.wall_layers.pop(wall_index, None)
+                    if state.exploded_wall_index == wall_index:
+                        # шари цієї стіни щойно очищено — розліт (вкладка «3D»)
+                        # більше нема що показувати, інакше стіна лишиться
+                        # схованою (заради розльоту) без жодної заміни.
+                        state.exploded_wall_index = None
 
                 self._send_json(200, {"wall_index": wall_index, "layers_count": len(layers)})
             except Exception as exc:  # noqa: BLE001
@@ -1031,6 +1113,7 @@ def build_handler_class(state: AppState) -> type[BaseHTTPRequestHandler]:
 
         def _handle_heat_reset(self) -> None:
             state.heat.wall_layers.clear()
+            state.exploded_wall_index = None
             self._send_json(200, {"reset": True})
 
         def _handle_heat_state(self) -> None:
@@ -1151,6 +1234,75 @@ def build_handler_class(state: AppState) -> type[BaseHTTPRequestHandler]:
             try:
                 scene = build_scene(state, _MATERIAL_DB)
                 self._send_json(200, scene)
+            except Exception as exc:  # noqa: BLE001
+                self._send_error_json(400, str(exc))
+
+        def _handle_motion_state(self) -> None:
+            """Стан розльоту шарів обраної стіни (`web/motion_state.py`),
+            режим «Будівництво» — для списку моментів `ts`, однією пачкою
+            кадрів. Якщо стіна не обрана — порожній план (нема що рухати),
+            не помилка: вкладка «3D» цього режиму цілком коректна й без
+            обраної стіни."""
+            try:
+                if state.room is None:
+                    raise ValueError("Спочатку намалюйте кімнату")
+                ts = _parse_motion_ts(self._read_json_body())
+
+                plans = []
+                if state.exploded_wall_index is not None:
+                    raw_layers = state.heat.wall_layers.get(state.exploded_wall_index)
+                    if raw_layers:
+                        wall_layers_mm = wall_layers_mm_from_heat_state(raw_layers)
+                        plans.append(build_wall_explosion_plan(state.room, state.exploded_wall_index, wall_layers_mm))
+                plan = merge_motion_plans(*plans)
+
+                self._send_json(200, serialize_motion_state(plan, ts))
+            except Exception as exc:  # noqa: BLE001
+                self._send_error_json(400, str(exc))
+
+        def _handle_motion_select_wall(self) -> None:
+            """Обирає (чи знімає, {"wall_index": null}) стіну для розльоту
+            шарів на вкладці «3D» — лише серед стін з уже заданими шарами
+            на вкладці «Тепло» (`state.heat.wall_layers`)."""
+            try:
+                if state.room is None:
+                    raise ValueError("Спочатку намалюйте кімнату")
+                payload = self._read_json_body()
+                raw_index = payload.get("wall_index")
+
+                if raw_index is None:
+                    state.exploded_wall_index = None
+                    self._send_json(200, {"wall_index": None})
+                    return
+
+                wall_index = int(raw_index)
+                if wall_index < 0 or wall_index >= len(state.room.walls):
+                    raise ValueError(f"Немає стіни з індексом {wall_index}")
+                if not state.heat.wall_layers.get(wall_index):
+                    raise ValueError(
+                        "Для цієї стіни ще не задані шари — спершу задайте їх на вкладці «Тепло»"
+                    )
+
+                state.exploded_wall_index = wall_index
+                self._send_json(200, {"wall_index": wall_index})
+            except Exception as exc:  # noqa: BLE001
+                self._send_error_json(400, str(exc))
+
+        # ---- режим «Механізми»: власна сцена, незалежна від кімнати ----
+
+        def _handle_mechanism_scene(self) -> None:
+            """Статична геометрія демо-стенду руху — без кімнати: режим
+            «Механізми» не має ані стін, ані підлоги, лише сам механізм."""
+            self._send_json(200, {"motion_rig": demo_motion_rig_layout()})
+
+        def _handle_mechanism_state(self) -> None:
+            """Стан демо-стенду руху для списку моментів `ts`, однією
+            пачкою кадрів — той самий підхід, що й `/api/motion/state`,
+            але повністю незалежний від кімнати/стіни (`build_demo_motion_plan`
+            тут без параметрів)."""
+            try:
+                ts = _parse_motion_ts(self._read_json_body())
+                self._send_json(200, serialize_motion_state(build_demo_motion_plan(), ts))
             except Exception as exc:  # noqa: BLE001
                 self._send_error_json(400, str(exc))
 

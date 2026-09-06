@@ -13,7 +13,7 @@
  * набору файлів оболонки, щоб activate() прибрав старий кеш.
  */
 
-const CACHE_NAME = "kovadlo-shell-v1";
+const CACHE_NAME = "kovadlo-shell-v2";
 
 const CORE_ASSETS = [
   "./",

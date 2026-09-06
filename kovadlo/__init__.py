@@ -242,7 +242,10 @@ from .shaft import (
 from .transmission import (
     BeltTransmission,
     DirectTransmission,
+    Gear,
     GearboxTransmission,
+    GearMesh,
+    GearTrain,
     Transmission,
     power_w,
     rad_s_to_rpm,
@@ -298,6 +301,19 @@ from .automation_report import (
     format_scenario_report,
     format_simulation_report,
 )
+from .motion import (
+    Composite,
+    Geared,
+    Linear,
+    Motion,
+    MotionPlan,
+    Rotation,
+    RotationalMotion,
+    Transform,
+    exploded_view_motion_plan,
+)
+from .bom import BomLine, build_bill_of_materials
+from .fasteners import Fastener, FastenerCatalog, FastenerKind, FastenerUsage
 
 __all__ = [
     "MM2_PER_M2",
@@ -521,7 +537,10 @@ __all__ = [
     "wheel_moment_of_inertia_kg_m2",
     "BeltTransmission",
     "DirectTransmission",
+    "Gear",
     "GearboxTransmission",
+    "GearMesh",
+    "GearTrain",
     "Transmission",
     "power_w",
     "rad_s_to_rpm",
@@ -579,4 +598,19 @@ __all__ = [
     "format_gate_system_report",
     "format_scenario_report",
     "format_simulation_report",
+    "Composite",
+    "Geared",
+    "Linear",
+    "Motion",
+    "MotionPlan",
+    "Rotation",
+    "RotationalMotion",
+    "Transform",
+    "exploded_view_motion_plan",
+    "BomLine",
+    "build_bill_of_materials",
+    "Fastener",
+    "FastenerCatalog",
+    "FastenerKind",
+    "FastenerUsage",
 ]
